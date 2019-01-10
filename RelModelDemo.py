@@ -64,9 +64,9 @@ time_table = []
 
 for i in range(num_test):
     bp = HybridLBP(g, n=10, sample_num_coefficient=10)
-    start_time = time.clock()
+    start_time = time.process_time()
     bp.run(10, log_enable=False)
-    time_table.append(time.clock() - start_time)
+    time_table.append(time.process_time() - start_time)
 
     j = 0
     for key, rv in rvs_table.items():
