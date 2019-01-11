@@ -63,7 +63,7 @@ result_table = np.zeros((len(rvs_table), num_test))
 time_table = []
 
 for i in range(num_test):
-    bp = HybridLBP(g, n=10, sample_num_coefficient=10)
+    bp = HybridLBP(g, n=30)
     start_time = time.process_time()
     bp.run(10, log_enable=False)
     time_table.append(time.process_time() - start_time)
@@ -82,7 +82,7 @@ for i in range(len(rvs_table)):
     print(key, mean, variance)
 
 # bp = GaBP(g)
-# bp.run(20, log_enable=False)
+# bp.run(15, log_enable=False)
 #
 # for key, rv in rvs_table.items():
 #     print(key, bp.map(rv))
