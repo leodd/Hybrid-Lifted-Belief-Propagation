@@ -61,7 +61,7 @@ g.rvs = rvs + evidence
 g.factors = fs
 g.init_nb()
 
-bp = HybridLBP(g, n=10)
+bp = HybridLBP(g, n=10, step_size=1)
 
 # def initial_proposal():
 #     for i in range(row):

@@ -13,20 +13,18 @@ import time
 class HybridLBP:
     # Hybrid lifted particle belief propagation
 
-    var_threshold = 1.0e-5
+    var_threshold = 0.2
     max_log_value = 700
 
     def __init__(self,
                  g,
                  n=50,
-                 sample_num_coefficient=10000,
-                 step_size=0.3,
+                 step_size=1.0,
                  max_diff_list=None,
                  k_mean_k=2,
                  k_mean_iteration=3):
         self.g = CompressedGraph(g)
         self.n = n
-        self.sample_num_coefficient = sample_num_coefficient
         self.step_size = step_size
         self.message = dict()  # log message, message in log space
         self.sample = dict()
@@ -45,14 +43,14 @@ class HybridLBP:
     def gaussian_product(*gaussian):
         # input a list of gaussian's mean and variance
         # output the product distribution's mean and variance
-        mu = gaussian[0][0]
-        var = gaussian[0][1]
-        for i in range(1, len(gaussian)):
-            mu_other = gaussian[i][0]
-            var_other = gaussian[i][1]
-            mu = (mu * var_other + mu_other * var) / (var + var_other)
-            var = var * var_other / (var + var_other)
-        return mu, var
+        mu, sig = 0, 0
+        for g in gaussian:
+            mu_, sig_, count = g
+            sig += sig_ ** -1 * count
+            mu += sig_ ** -1 * mu_ * count
+        sig = sig ** -1
+        mu = sig * mu
+        return mu, sig
 
     ###########################
     # EPBP functions
@@ -63,8 +61,7 @@ class HybridLBP:
         for rv in self.g.rvs:
             if rv.value is None:
                 if rv.domain.continuous:
-                    sample[rv] = norm(self.q[rv][0], sqrt(self.q[rv][1]))\
-                        .rvs(int(self.n * (1 + log(len(rv.rvs), self.sample_num_coefficient))))
+                    sample[rv] = norm(self.q[rv][0], sqrt(self.q[rv][1])).rvs(self.n)
                 else:
                     sample[rv] = rv.domain.values
             else:
@@ -74,8 +71,7 @@ class HybridLBP:
     def initial_proposal(self):
         for rv in self.g.rvs:
             if rv.value is None and rv.domain.continuous:
-                average = sum(rv.domain.values) / 2
-                self.q[rv] = (average, 10)
+                self.q[rv] = (0, 5)
             else:
                 self.q[rv] = None
 
@@ -85,13 +81,13 @@ class HybridLBP:
                 # time_start = time.clock()
                 eta = list()
                 for f in rv.nb:
-                    eta.append(self.eta_message_f_to_rv(f, rv))
+                    mu, sig = self.eta_message_f_to_rv(f, rv)
+                    eta.append((mu, sig, rv.count[f]))
                 mu, sig = self.gaussian_product(*eta)
                 old_mu, old_sig = self.q[rv]
                 mu = old_mu + self.step_size * (mu - old_mu)
                 sig = old_sig + self.step_size * (sig - old_sig)
-                if sig < self.var_threshold:
-                    sig = self.var_threshold
+                sig = max(sig, self.var_threshold)
                 self.q[rv] = (mu, sig)
             else:
                 self.q[rv] = None
@@ -154,7 +150,6 @@ class HybridLBP:
             for i in range(len(f.nb)):
                 if f.nb[i] != rv:
                     m += self.message[(f.nb[i], f)][x_join[i]]
-            # print(m)
             res += f.potential.get(x_join) * e ** m
 
         return log(res) if res > 0 else -700
@@ -318,9 +313,11 @@ class HybridLBP:
 
         # initialize cluster
         self.g.init_cluster()
-        self.g.split_evidence(self.k_mean_k, self.k_mean_iteration, max_diff)
-        self.g.split_factors()
-        self.g.split_rvs()
+        while len(self.g.continuous_evidence) > 0:
+            self.g.split_evidence(self.k_mean_k, self.k_mean_iteration, max_diff)
+        for _ in range(20):
+            self.g.split_factors()
+            self.g.split_rvs()
 
         # initialize proposal
         self.custom_initial_proposal()
@@ -342,18 +339,18 @@ class HybridLBP:
             if log_enable:
                 time_start = time.clock()
 
-            if i > 0:
-                if self.max_diff_list is not None:
-                    max_diff = self.max_diff_list[0]
-
-                self.split_evidence(self.k_mean_k, self.k_mean_iteration, max_diff)
-                if log_enable:
-                    print(f'\tevidence {time.clock() - time_start}')
-                    time_start = time.clock()
-                self.split_rvs()
-                if log_enable:
-                    print(f'\tsplit rv {time.clock() - time_start}')
-                    time_start = time.clock()
+            # if i > 0:
+            #     if self.max_diff_list is not None:
+            #         max_diff = self.max_diff_list[0]
+            #
+            #     self.split_evidence(self.k_mean_k, self.k_mean_iteration, max_diff)
+            #     if log_enable:
+            #         print(f'\tevidence {time.clock() - time_start}')
+            #         time_start = time.clock()
+            #     self.split_rvs()
+            #     if log_enable:
+            #         print(f'\tsplit rv {time.clock() - time_start}')
+            #         time_start = time.clock()
 
             # calculate messages from rv to f
             for rv in self.g.rvs:
@@ -376,10 +373,10 @@ class HybridLBP:
                     print(f'\tproposal {time.clock() - time_start}')
                     time_start = time.clock()
 
-                self.split_factors()
-                if log_enable:
-                    print(f'\tsplit factor {time.clock() - time_start}')
-                    time_start = time.clock()
+                # self.split_factors()
+                # if log_enable:
+                #     print(f'\tsplit factor {time.clock() - time_start}')
+                #     time_start = time.clock()
 
                 # poll new sample
                 old_sample = self.sample
@@ -403,4 +400,4 @@ class HybridLBP:
                 if log_enable:
                     print(f'\tf to rv {time.clock() - time_start}')
 
-        self.split_factors()
+        # self.split_factors()

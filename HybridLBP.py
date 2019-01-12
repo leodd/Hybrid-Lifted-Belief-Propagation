@@ -17,11 +17,13 @@ class HybridLBP:
     def __init__(self,
                  g,
                  n=50,
+                 step_size=0.2,
                  max_diff_list=None,
                  k_mean_k=2,
                  k_mean_iteration=3):
         self.g = CompressedGraph(g)
         self.n = n
+        self.step_size = step_size
         self.message = dict()
         self.sample = dict()
         self.q = dict()
@@ -39,14 +41,14 @@ class HybridLBP:
     def gaussian_product(*gaussian):
         # input a list of gaussian's mean and variance
         # output the product distribution's mean and variance
-        mu = gaussian[0][0]
-        var = gaussian[0][1]
-        for i in range(1, len(gaussian)):
-            mu_other = gaussian[i][0]
-            var_other = gaussian[i][1]
-            mu = (mu * var_other + mu_other * var) / (var + var_other)
-            var = var * var_other / (var + var_other)
-        return mu, var
+        mu, sig = 0, 0
+        for g in gaussian:
+            mu_, sig_, count = g
+            sig += sig_ ** -1 * count
+            mu += sig_ ** -1 * mu_ * count
+        sig = sig ** -1
+        mu = sig * mu
+        return mu, sig
 
     ###########################
     # EPBP functions
@@ -78,11 +80,15 @@ class HybridLBP:
                 # time_start = time.clock()
                 eta = list()
                 for f in rv.nb:
-                    eta.append(self.eta_message_f_to_rv(f, rv))
-                new_q = self.gaussian_product(*eta)
-                if new_q[1] < self.var_threshold:
-                    new_q = (new_q[0], self.q[rv][1])
-                self.q[rv] = new_q
+                    mu, sig = self.eta_message_f_to_rv(f, rv)
+                    eta.append((mu, sig, rv.count[f]))
+                mu, sig = self.gaussian_product(*eta)
+                old_mu, old_sig = self.q[rv]
+                mu = old_mu + self.step_size * (mu - old_mu)
+                sig = old_sig + self.step_size * (sig - old_sig)
+                if sig < self.var_threshold:
+                    sig = self.var_threshold
+                self.q[rv] = (mu, sig)
             else:
                 self.q[rv] = None
 
@@ -152,7 +158,7 @@ class HybridLBP:
         # incoming message (from neighbouring rvs to neighbouring f) should be calculated before this process
         res = 1
         for f in rv.nb:
-            res = res * self.message_f_to_rv(x, f, rv, sample)
+            res *= self.message_f_to_rv(x, f, rv, sample) ** rv.count[f]
         return res
 
     @staticmethod

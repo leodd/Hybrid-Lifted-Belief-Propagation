@@ -23,7 +23,7 @@ for row in D:
     key = tuple([x.strip() for x in row[0].split(',')])
     if key[0] == 'revenue': continue
     data[key] = float(row[1])
-data[('recession', 'all')] = 50
+data[('recession', 'all')] = 5.298
 
 domain_percentage = Domain((-100, 100), continuous=True, integral_points=linspace(-100, 100, 30))
 domain_billion = Domain((-50, 50), continuous=True, integral_points=linspace(-50, 50, 30))
@@ -33,8 +33,8 @@ p2 = GaussianPotential([0., 0.], [[100., 50.], [50., 100.]])
 p3 = GaussianPotential([0., 0.], [[100., 70.], [70., 100.]])
 
 lv_recession = LV(('all',))
-lv_category = LV(instance_category)
-lv_bank = LV(instance_bank)
+lv_category = LV(instance_category[:100])
+lv_bank = LV(instance_bank[:5])
 
 atom_recession = Atom(domain_percentage, logical_variables=(lv_recession,), name='recession')
 atom_market = Atom(domain_percentage, logical_variables=(lv_category,), name='market')
@@ -58,12 +58,12 @@ j = 0
 for key in rvs_table:
     key_table.append(key)
     j += 1
-num_test = 5
+num_test = 1
 result_table = np.zeros((len(rvs_table), num_test))
 time_table = []
 
 for i in range(num_test):
-    bp = HybridLBP(g, n=30)
+    bp = HybridLBP(g, n=10)
     start_time = time.process_time()
     bp.run(10, log_enable=False)
     time_table.append(time.process_time() - start_time)
@@ -82,7 +82,7 @@ for i in range(len(rvs_table)):
     print(key, mean, variance)
 
 # bp = GaBP(g)
-# bp.run(15, log_enable=False)
+# bp.run(20, log_enable=False)
 #
 # for key, rv in rvs_table.items():
 #     print(key, bp.map(rv))

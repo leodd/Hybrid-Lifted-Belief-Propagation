@@ -26,14 +26,14 @@ class EPBP:
     def gaussian_product(*gaussian):
         # input a list of gaussian's mean and variance
         # output the product distribution's mean and variance
-        mu = gaussian[0][0]
-        var = gaussian[0][1]
-        for i in range(1, len(gaussian)):
-            mu_other = gaussian[i][0]
-            var_other = gaussian[i][1]
-            mu = (mu * var_other + mu_other * var) / (var + var_other)
-            var = var * var_other / (var + var_other)
-        return mu, var
+        mu, sig = 0, 0
+        for g in gaussian:
+            mu_, sig_ = g
+            sig += sig_ ** -1
+            mu += sig_ ** -1 * mu_
+        sig = sig ** -1
+        mu = sig * mu
+        return mu, sig
 
     def generate_sample(self):
         sample = dict()
