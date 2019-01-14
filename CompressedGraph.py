@@ -58,7 +58,7 @@ class SuperRV:
 
         return res
 
-    def split_by_evidence(self, k=2, iteration=3, max_diff=0):
+    def split_by_evidence(self, k=2, iteration=3):
         # can only be split into two when it is evidence rv, and there are multiple rvs
         if len(self.rvs) <= 1:
             return {self}
@@ -67,9 +67,6 @@ class SuperRV:
         values = Counter()
         for rv in self.rvs:
             values[rv.value] += 1
-
-        if max(values) - min(values) < max_diff:
-            return {self}
 
         if len(values) < k:
             k = len(values)
@@ -218,13 +215,11 @@ class CompressedGraph:
         for _, cluster in color_table.items():
             self.factors.add(SuperF(cluster))
 
-    def split_evidence(self, k=2, iteration=3, max_centroid_diff=0):
+    def split_evidence(self, k=2, iteration=3):
         temp = set()
         for rv in self.continuous_evidence:
-            new_rvs = rv.split_by_evidence(k, iteration, max_centroid_diff)
+            new_rvs = rv.split_by_evidence(k, iteration)
             if len(new_rvs) > 1:
-                temp |= new_rvs
-            elif len(next(iter(new_rvs)).rvs) > 1:
                 temp |= new_rvs
         self.continuous_evidence = temp
         self.rvs |= temp

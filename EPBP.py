@@ -14,9 +14,10 @@ class EPBP:
 
     var_threshold = 0.2
 
-    def __init__(self, g=None, n=50):
+    def __init__(self, g=None, n=50, step_size=1.0):
         self.g = g
         self.n = n
+        self.step_size = step_size
         self.message = dict()
         self.sample = dict()
         self.q = dict()
@@ -56,11 +57,14 @@ class EPBP:
             if rv.value is None:
                 eta = list()
                 for f in rv.nb:
-                    eta.append(self.eta_message_f_to_rv(f, rv))
-                new_q = self.gaussian_product(*eta)
-                if new_q[1] < self.var_threshold:
-                    new_q = (new_q[0], self.q[rv][1])
-                self.q[rv] = new_q
+                    mu, sig = self.eta_message_f_to_rv(f, rv)
+                    eta.append((mu, sig))
+                mu, sig = self.gaussian_product(*eta)
+                old_mu, old_sig = self.q[rv]
+                mu = old_mu + self.step_size * (mu - old_mu)
+                sig = old_sig + self.step_size * (sig - old_sig)
+                sig = max(sig, self.var_threshold)
+                self.q[rv] = (mu, sig)
             else:
                 self.q[rv] = None
 

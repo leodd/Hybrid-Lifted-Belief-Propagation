@@ -18,7 +18,6 @@ class HybridLBP:
                  g,
                  n=50,
                  step_size=0.2,
-                 max_diff_list=None,
                  k_mean_k=2,
                  k_mean_iteration=3):
         self.g = CompressedGraph(g)
@@ -31,7 +30,6 @@ class HybridLBP:
         self.custom_initial_proposal = self.initial_proposal
         self.k_mean_k = k_mean_k
         self.k_mean_iteration = k_mean_iteration
-        self.max_diff_list = max_diff_list
 
     ###########################
     # utils
@@ -173,20 +171,18 @@ class HybridLBP:
     # color passing functions
     ###########################
 
-    def split_evidence(self, k=2, iteration=3, max_centroid_diff=0):
+    def split_evidence(self, k=2, iteration=3):
         temp = set()
         for rv in self.g.continuous_evidence:
             # split evidence
-            new_rvs = rv.split_by_evidence(k, iteration, max_centroid_diff)
+            new_rvs = rv.split_by_evidence(k, iteration)
 
             if len(new_rvs) > 1:
                 for new_rv in new_rvs:
                     # update sample
                     self.sample[new_rv] = (new_rv.value,)
                 temp |= new_rvs
-            elif len(next(iter(new_rvs)).rvs) > 1:
-                # if the super rv has multiple rvs, we will still consider splitting it in the next iteration
-                temp |= new_rvs
+
         self.g.continuous_evidence = temp
         self.g.rvs |= temp
 
@@ -297,15 +293,9 @@ class HybridLBP:
     ###########################
 
     def run(self, iteration=10, k_mean_k=2, k_mean_iteration=3, log_enable=False):
-        self.query_cache.clear()
-
-        max_diff = 0
-        if self.max_diff_list is not None:
-            max_diff = self.max_diff_list[0]
-
         # initialize cluster
         self.g.init_cluster()
-        self.g.split_evidence(self.k_mean_k, self.k_mean_iteration, max_diff)
+        self.g.split_evidence(self.k_mean_k, self.k_mean_iteration)
         self.g.split_factors()
         self.g.split_rvs()
 
@@ -330,10 +320,7 @@ class HybridLBP:
                 time_start = time.clock()
 
             if i > 0:
-                if self.max_diff_list is not None:
-                    max_diff = self.max_diff_list[0]
-
-                self.split_evidence(self.k_mean_k, self.k_mean_iteration, max_diff)
+                self.split_evidence(self.k_mean_k, self.k_mean_iteration)
                 if log_enable:
                     print(f'\tevidence {time.clock() - time_start}')
                     time_start = time.clock()

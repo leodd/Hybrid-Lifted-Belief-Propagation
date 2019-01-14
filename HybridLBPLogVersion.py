@@ -13,14 +13,13 @@ import time
 class HybridLBP:
     # Hybrid lifted particle belief propagation
 
-    var_threshold = 0.2
+    var_threshold = 1.0e-1
     max_log_value = 700
 
     def __init__(self,
                  g,
                  n=50,
                  step_size=1.0,
-                 max_diff_list=None,
                  k_mean_k=2,
                  k_mean_iteration=3):
         self.g = CompressedGraph(g)
@@ -33,7 +32,6 @@ class HybridLBP:
         self.custom_initial_proposal = self.initial_proposal
         self.k_mean_k = k_mean_k
         self.k_mean_iteration = k_mean_iteration
-        self.max_diff_list = max_diff_list
 
     ###########################
     # utils
@@ -64,16 +62,12 @@ class HybridLBP:
                     sample[rv] = norm(self.q[rv][0], sqrt(self.q[rv][1])).rvs(self.n)
                 else:
                     sample[rv] = rv.domain.values
-            else:
-                sample[rv] = (rv.value,)
         return sample
 
     def initial_proposal(self):
         for rv in self.g.rvs:
             if rv.value is None and rv.domain.continuous:
                 self.q[rv] = (0, 5)
-            else:
-                self.q[rv] = None
 
     def update_proposal(self):
         for rv in self.g.rvs:
@@ -88,9 +82,8 @@ class HybridLBP:
                 mu = old_mu + self.step_size * (mu - old_mu)
                 sig = old_sig + self.step_size * (sig - old_sig)
                 sig = max(sig, self.var_threshold)
+                # print(f'{(old_mu, old_sig)} -> {(mu, sig)}')
                 self.q[rv] = (mu, sig)
-            else:
-                self.q[rv] = None
 
     def important_weight(self, x, rv):
         if rv.value is None and rv.domain.continuous:
@@ -129,30 +122,75 @@ class HybridLBP:
                 if nb != f:
                     res += self.message[(nb, rv)][x] * rv.count[nb]
             return res + log(self.important_weight(x, rv)) + self.message[(f, rv)][x] * (rv.count[f] - 1)
-        else:
-            return 0
+
+    # def message_f_to_rv(self, x, f, rv, sample):
+    #     # sample is a set of sample points of neighbouring rvs
+    #     # incoming message should be calculated before this process
+    #     res = 0
+    #     param = []
+    #     flag = True
+    #     for nb in f.nb:
+    #         if nb == rv and flag:
+    #             param.append((x,))
+    #             flag = False
+    #         elif nb.value is None:
+    #             param.append(sample[nb])
+    #         else:
+    #             param.append((nb.value,))
+    #
+    #     for x_join in product(*param):
+    #         m = 0
+    #         for idx, nb in enumerate(f.nb):
+    #             if nb != rv and nb.value is None:
+    #                 m += self.message[(nb, f)][x_join[idx]]
+    #         res += f.potential.get(x_join) * e ** m
+    #
+    #     return log(res) if res > 0 else -700
 
     def message_f_to_rv(self, x, f, rv, sample):
         # sample is a set of sample points of neighbouring rvs
         # incoming message should be calculated before this process
-        res = 0
         param = []
+        evidence_idx = []
         flag = True
-        for nb in f.nb:
+        for idx, nb in enumerate(f.nb):
             if nb == rv and flag:
                 param.append((x,))
                 flag = False
-            else:
+            elif nb.value is None:
                 param.append(sample[nb])
+            else:
+                param.append((0,))
+                evidence_idx.append(idx)
 
+        table = []
         for x_join in product(*param):
             m = 0
-            for i in range(len(f.nb)):
-                if f.nb[i] != rv:
-                    m += self.message[(f.nb[i], f)][x_join[i]]
-            res += f.potential.get(x_join) * e ** m
+            for idx, nb in enumerate(f.nb):
+                if nb != rv and nb.value is None:
+                    m += self.message[(nb, f)][x_join[idx]]
+            table.append((x_join, e ** m))
 
-        return log(res) if res > 0 else -700
+        res = 0
+        evidence = np.zeros(len(param))
+        if len(evidence_idx) > 0:
+            for f_ in f.factors:
+                for idx in evidence_idx:
+                    evidence[idx] = f_.nb[idx].value
+
+                temp = 0
+                for row in table:
+                    temp += f.potential.get(row[0] + evidence) * row[1]
+                temp = log(temp) if temp > 0 else -700
+
+                res += temp
+
+            return res / len(f.factors)
+        else:
+            res = 0
+            for row in table:
+                res += f.potential.get(row[0]) * row[1]
+            return log(res) if res > 0 else -700
 
     def belief_rv(self, x, rv, sample):
         # sample is a set of sample points of neighbouring rvs
@@ -183,20 +221,15 @@ class HybridLBP:
     # color passing functions
     ###########################
 
-    def split_evidence(self, k=2, iteration=3, max_centroid_diff=0):
+    def split_evidence(self, k=2, iteration=3):
         temp = set()
         for rv in self.g.continuous_evidence:
             # split evidence
-            new_rvs = rv.split_by_evidence(k, iteration, max_centroid_diff)
+            new_rvs = rv.split_by_evidence(k, iteration)
 
             if len(new_rvs) > 1:
-                for new_rv in new_rvs:
-                    # update sample
-                    self.sample[new_rv] = (new_rv.value,)
                 temp |= new_rvs
-            elif len(next(iter(new_rvs)).rvs) > 1:
-                # if the super rv has multiple rvs, we will still consider splitting it in the next iteration
-                temp |= new_rvs
+
         self.g.continuous_evidence = temp
         self.g.rvs |= temp
 
@@ -214,10 +247,11 @@ class HybridLBP:
                             self.message[(f, new_rv)] = self.message[(f, rv)]
                         # update proposal
                         self.q[new_rv] = self.q[rv]
+                        # update sample
+                        self.sample[new_rv] = self.sample[rv]
 
-                    # update sample
-                    self.sample[new_rv] = self.sample[rv]
             temp |= new_rvs
+
         self.g.rvs = temp
 
     def split_factors(self):
@@ -229,8 +263,11 @@ class HybridLBP:
             for new_f in new_fs:
                 # update message
                 for rv in new_f.nb:
-                    self.message[(rv, new_f)] = self.message[(rv, f)]
+                    if rv.value is None:
+                        self.message[(rv, new_f)] = self.message[(rv, f)]
+
             temp |= new_fs
+
         self.g.factors = temp
 
     ###########################
@@ -286,6 +323,7 @@ class HybridLBP:
                     res = fmin(lambda val: -self.belief_rv_query(val, rv, self.sample), 0, disp=False)[0]
                     self.query_cache[signature] = res
 
+                # print(f'{self.q[rv.cluster]}')
                 return res
             else:
                 if signature in self.query_cache:
@@ -307,17 +345,13 @@ class HybridLBP:
     ###########################
 
     def run(self, iteration=10, log_enable=False):
-        max_diff = 0
-        if self.max_diff_list is not None:
-            max_diff = self.max_diff_list[0]
-
         # initialize cluster
         self.g.init_cluster()
-        while len(self.g.continuous_evidence) > 0:
-            self.g.split_evidence(self.k_mean_k, self.k_mean_iteration, max_diff)
-        for _ in range(20):
-            self.g.split_factors()
-            self.g.split_rvs()
+        # while len(self.g.continuous_evidence) > 0:
+        self.g.split_evidence(self.k_mean_k, self.k_mean_iteration)
+        # for _ in range(20):
+        self.g.split_factors()
+        self.g.split_rvs()
 
         # initialize proposal
         self.custom_initial_proposal()
@@ -327,11 +361,12 @@ class HybridLBP:
 
         # initialize log message to 0
         for rv in self.g.rvs:
-            for f in rv.nb:
-                m = {k: 0 for k in self.sample[rv]}
-                eta_m = {k: 0 for k in rv.domain.integral_points}
-                self.message[(f, rv)] = {**m, **eta_m}
-                self.message[(rv, f)] = m
+            if rv.value is None:
+                for f in rv.nb:
+                    m = {k: 0 for k in self.sample[rv]}
+                    eta_m = {k: 0 for k in rv.domain.integral_points}
+                    self.message[(f, rv)] = {**m, **eta_m}
+                    self.message[(rv, f)] = m
 
         # LBP iteration
         for i in range(iteration):
@@ -339,28 +374,27 @@ class HybridLBP:
             if log_enable:
                 time_start = time.clock()
 
-            # if i > 0:
-            #     if self.max_diff_list is not None:
-            #         max_diff = self.max_diff_list[0]
-            #
-            #     self.split_evidence(self.k_mean_k, self.k_mean_iteration, max_diff)
-            #     if log_enable:
-            #         print(f'\tevidence {time.clock() - time_start}')
-            #         time_start = time.clock()
-            #     self.split_rvs()
-            #     if log_enable:
-            #         print(f'\tsplit rv {time.clock() - time_start}')
-            #         time_start = time.clock()
+            if i > 0:
+                self.split_evidence(self.k_mean_k, self.k_mean_iteration)
+                if log_enable:
+                    print(f'\tevidence {time.clock() - time_start}')
+                    time_start = time.clock()
+
+                self.split_rvs()
+                if log_enable:
+                    print(f'\tsplit rv {time.clock() - time_start}')
+                    time_start = time.clock()
 
             # calculate messages from rv to f
             for rv in self.g.rvs:
-                for f in rv.nb:
-                    # compute the message for each sample point
-                    m = dict()
-                    for point in self.sample[rv]:
-                        m[point] = self.message_rv_to_f(point, rv, f)
-                    self.log_message_balance(m)
-                    self.message[(rv, f)] = m
+                if rv.value is None:
+                    for f in rv.nb:
+                        # compute the message for each sample point
+                        m = dict()
+                        for point in self.sample[rv]:
+                            m[point] = self.message_rv_to_f(point, rv, f)
+                        self.log_message_balance(m)
+                        self.message[(rv, f)] = m
 
             if log_enable:
                 print(f'\trv to f {time.clock() - time_start}')
@@ -373,10 +407,10 @@ class HybridLBP:
                     print(f'\tproposal {time.clock() - time_start}')
                     time_start = time.clock()
 
-                # self.split_factors()
-                # if log_enable:
-                #     print(f'\tsplit factor {time.clock() - time_start}')
-                #     time_start = time.clock()
+                self.split_factors()
+                if log_enable:
+                    print(f'\tsplit factor {time.clock() - time_start}')
+                    time_start = time.clock()
 
                 # poll new sample
                 old_sample = self.sample
@@ -400,4 +434,4 @@ class HybridLBP:
                 if log_enable:
                     print(f'\tf to rv {time.clock() - time_start}')
 
-        # self.split_factors()
+        self.split_factors()
