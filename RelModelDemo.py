@@ -33,8 +33,8 @@ p2 = GaussianPotential([0., 0.], [[10., 5.], [5., 10.]])
 p3 = GaussianPotential([0., 0.], [[10., 7.], [7., 10.]])
 
 lv_recession = LV(('all',))
-lv_category = LV(instance_category[:200])
-lv_bank = LV(instance_bank)
+lv_category = LV(instance_category[:10])
+lv_bank = LV(instance_bank[:2])
 
 atom_recession = Atom(domain_percentage, logical_variables=(lv_recession,), name='recession')
 atom_market = Atom(domain_percentage, logical_variables=(lv_category,), name='market')
@@ -53,36 +53,44 @@ rel_g.data = data
 rel_g.init_nb()
 g, rvs_table = rel_g.grounded_graph()
 
-# key_table = []
-# j = 0
-# for key in rvs_table:
-#     key_table.append(key)
-#     j += 1
-# num_test = 1
-# result_table = np.zeros((len(rvs_table), num_test))
-# time_table = []
-#
-# for i in range(num_test):
-#     bp = HybridLBP(g, n=20, step_size=0.4)
-#     start_time = time.process_time()
-#     bp.run(10, log_enable=False)
-#     time_table.append(time.process_time() - start_time)
-#
-#     j = 0
-#     for key, rv in rvs_table.items():
-#         result_table[j, i] = bp.map(rv)
-#         j += 1
-#
-# print('average time', np.mean(time_table))
-#
-# for i in range(len(rvs_table)):
-#     key = key_table[i]
-#     mean = np.mean(result_table[i])
-#     variance = np.var(result_table[i])
-#     print(key, mean, variance)
+key_table = []
+j = 0
+for key in rvs_table:
+    key_table.append(key)
+    j += 1
+num_test = 1
+result_table = np.zeros((len(rvs_table), num_test))
+time_table = []
 
-bp = GaBP(g)
-bp.run(20, log_enable=False)
+for i in range(num_test):
+    bp = EPBP(g, n=20, step_size=0.4)
+    start_time = time.process_time()
+    bp.run(10, log_enable=False)
+    time_table.append(time.process_time() - start_time)
 
-for key, rv in rvs_table.items():
-    print(key, bp.map(rv))
+    j = 0
+    for key, rv in rvs_table.items():
+        result_table[j, i] = bp.map(rv)
+        j += 1
+
+print('average time', np.mean(time_table))
+
+for i in range(len(rvs_table)):
+    key = key_table[i]
+    mean = np.mean(result_table[i])
+    variance = np.var(result_table[i])
+    print(key, mean, variance)
+
+# bp = GaBP(g)
+# bp.run(20, log_enable=False)
+#
+# for key, rv in rvs_table.items():
+#     print(key, bp.map(rv))
+
+# i = 0
+# for key, rv in rvs_table.items():
+#     ans = bp.map(rv)
+#     err = result_table[i] - ans
+#     sqe = np.average(err ** 2)
+#     print(key, np.average(result_table[i]), sqe)
+#     i += 1
