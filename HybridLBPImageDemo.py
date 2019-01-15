@@ -1,6 +1,6 @@
 import pandas as pd
 from Potential import *
-from HybridLBP import *
+from HybridLBPLogVersion import *
 import numpy as np
 from show_image import show_images
 

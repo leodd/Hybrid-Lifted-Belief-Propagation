@@ -5,7 +5,9 @@ from scipy.stats import norm
 from scipy.optimize import fmin
 from statistics import mean
 from math import sqrt, log, e
+from collections import Counter
 from itertools import product
+import random
 
 import time
 
@@ -147,6 +149,55 @@ class HybridLBP:
     #
     #     return log(res) if res > 0 else -700
 
+    # def message_f_to_rv(self, x, f, rv, sample):
+    #     # sample is a set of sample points of neighbouring rvs
+    #     # incoming message should be calculated before this process
+    #     param = []
+    #     evidence_idx = []
+    #     flag = True
+    #     for idx, nb in enumerate(f.nb):
+    #         if nb == rv and flag:
+    #             param.append((x,))
+    #             flag = False
+    #         elif nb.value is None:
+    #             param.append(sample[nb])
+    #         else:
+    #             param.append((0,))
+    #             evidence_idx.append(idx)
+    #
+    #     table = []
+    #     for x_join in product(*param):
+    #         m = 0
+    #         for idx, nb in enumerate(f.nb):
+    #             if nb != rv and nb.value is None:
+    #                 m += self.message[(nb, f)][x_join[idx]]
+    #         table.append((x_join, e ** m))
+    #
+    #     if len(evidence_idx) > 0:
+    #         res = 0
+    #         evidence = Counter()
+    #
+    #         temp = [0] * len(param)
+    #         for f_ in f.factors:
+    #             for idx in evidence_idx:
+    #                 temp[idx] = f_.nb[idx].value
+    #             evidence[tuple(temp)] += 1
+    #
+    #         for v, n in evidence.items():
+    #             temp = 0
+    #             for row in table:
+    #                 temp += f.potential.get(row[0] + np.array(v)) * row[1]
+    #             temp = log(temp) if temp > 0 else -700
+    #
+    #             res += temp * n
+    #
+    #         return res / len(f.factors)
+    #     else:
+    #         res = 0
+    #         for row in table:
+    #             res += f.potential.get(row[0]) * row[1]
+    #         return log(res) if res > 0 else -700
+
     def message_f_to_rv(self, x, f, rv, sample):
         # sample is a set of sample points of neighbouring rvs
         # incoming message should be calculated before this process
@@ -171,19 +222,24 @@ class HybridLBP:
                     m += self.message[(nb, f)][x_join[idx]]
             table.append((x_join, e ** m))
 
-        res = 0
-        evidence = np.zeros(len(param))
         if len(evidence_idx) > 0:
-            for f_ in f.factors:
-                for idx in evidence_idx:
-                    evidence[idx] = f_.nb[idx].value
+            res = 0
+            evidence = Counter()
 
+            temp = [0] * len(param)
+            pool = random.sample(f.factors, self.n) if len(f.factors) > self.n else f.factors
+            for f_ in pool:
+                for idx in evidence_idx:
+                    temp[idx] = f_.nb[idx].value
+                evidence[tuple(temp)] += 1
+
+            for v, n in evidence.items():
                 temp = 0
                 for row in table:
-                    temp += f.potential.get(row[0] + evidence) * row[1]
+                    temp += f.potential.get(row[0] + np.array(v)) * row[1]
                 temp = log(temp) if temp > 0 else -700
 
-                res += temp
+                res += temp * n
 
             return res / len(f.factors)
         else:
