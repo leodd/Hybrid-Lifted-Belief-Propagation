@@ -1,4 +1,5 @@
 from Graph import *
+from RelationalGraph import RelationalGraph
 from collections import Counter
 from statistics import mean
 from random import uniform
@@ -160,13 +161,19 @@ class SuperF:
 class CompressedGraph:
     # color passing algorithm for compressing graph
 
-    def __init__(self, grounded_graph):
-        self.g = grounded_graph
+    def __init__(self, graph):
+        self.g = graph
         self.rvs = set()
         self.factors = set()
         self.continuous_evidence = set()
 
     def init_cluster(self):
+        if type(self.g) is RelationalGraph:
+            self.rel_graph_init()
+        else:
+            self.grounded_graph_init()
+
+    def grounded_graph_init(self):
         self.rvs.clear()
         self.factors.clear()
         self.continuous_evidence.clear()
@@ -214,6 +221,11 @@ class CompressedGraph:
                 color_table[f.potential] = {f}
         for _, cluster in color_table.items():
             self.factors.add(SuperF(cluster))
+
+    def rel_graph_init(self):
+        self.rvs.clear()
+        self.factors.clear()
+        self.continuous_evidence.clear()
 
     def split_evidence(self, k=2, iteration=3):
         temp = set()

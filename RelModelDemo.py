@@ -21,7 +21,7 @@ for row in X:
 data = dict()
 for row in D:
     key = tuple([x.strip() for x in row[0].split(',')])
-    if key[0] == 'revenue': continue
+    if key[0] == 'revenue' or key[0] == 'market': continue
     data[key] = float(row[1])
 data[('recession', 'all')] = 50
 
@@ -33,8 +33,8 @@ p2 = GaussianPotential([0., 0.], [[10., 5.], [5., 10.]])
 p3 = GaussianPotential([0., 0.], [[10., 7.], [7., 10.]])
 
 lv_recession = LV(('all',))
-lv_category = LV(instance_category[:200])
-lv_bank = LV(instance_bank[:10])
+lv_category = LV(instance_category[:100])
+lv_bank = LV(instance_bank[:5])
 
 atom_recession = Atom(domain_percentage, logical_variables=(lv_recession,), name='recession')
 atom_market = Atom(domain_percentage, logical_variables=(lv_category,), name='market')
@@ -64,7 +64,7 @@ j = 0
 for key in rvs_table:
     key_table.append(key)
     j += 1
-num_test = 1
+num_test = 5
 result_table = np.zeros((len(rvs_table), num_test))
 time_table = []
 

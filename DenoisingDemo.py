@@ -1,6 +1,8 @@
 import pandas as pd
 from Potential import *
-from EPBP import *
+from Graph import *
+from HybridLBPLogVersion import HybridLBP
+from EPBPLogVersion import EPBP
 import numpy as np
 from show_image import show_images
 
@@ -61,7 +63,7 @@ g.rvs = rvs + evidence
 g.factors = fs
 g.init_nb()
 
-bp = EPBP(g, 10)
+bp = HybridLBP(g, n=10, step_size=1)
 
 # def initial_proposal():
 #     for i in range(row):
@@ -70,7 +72,9 @@ bp = EPBP(g, 10)
 #
 # bp.custom_initial_proposal = initial_proposal
 
-bp.run(6)
+bp.run(6, log_enable=True)
+
+print(len(bp.g.rvs))
 
 # reconstruct image
 m_hat = np.zeros((row, col))
