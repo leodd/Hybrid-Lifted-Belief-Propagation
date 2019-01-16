@@ -354,9 +354,7 @@ class HybridLBP:
     def run(self, iteration=10, log_enable=False):
         # initialize cluster
         self.g.init_cluster()
-        # while len(self.g.continuous_evidence) > 0:
         self.g.split_evidence(self.k_mean_k, self.k_mean_iteration)
-        # for _ in range(20):
         self.g.split_factors()
         self.g.split_rvs()
 
