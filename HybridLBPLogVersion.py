@@ -23,7 +23,7 @@ class HybridLBP:
                  n=50,
                  step_size=1.0,
                  k_mean_k=2,
-                 k_mean_iteration=3):
+                 k_mean_iteration=10):
         self.g = CompressedGraph(g)
         self.n = n
         self.step_size = step_size
@@ -125,79 +125,79 @@ class HybridLBP:
                     res += self.message[(nb, rv)][x] * rv.count[nb]
             return res + log(self.important_weight(x, rv)) + self.message[(f, rv)][x] * (rv.count[f] - 1)
 
-    # def message_f_to_rv(self, x, f, rv, sample):
-    #     # sample is a set of sample points of neighbouring rvs
-    #     # incoming message should be calculated before this process
-    #     res = 0
-    #     param = []
-    #     flag = True
-    #     for nb in f.nb:
-    #         if nb == rv and flag:
-    #             param.append((x,))
-    #             flag = False
-    #         elif nb.value is None:
-    #             param.append(sample[nb])
-    #         else:
-    #             param.append((nb.value,))
-    #
-    #     for x_join in product(*param):
-    #         m = 0
-    #         for idx, nb in enumerate(f.nb):
-    #             if nb != rv and nb.value is None:
-    #                 m += self.message[(nb, f)][x_join[idx]]
-    #         res += f.potential.get(x_join) * e ** m
-    #
-    #     return log(res) if res > 0 else -700
-
     def message_f_to_rv(self, x, f, rv, sample):
         # sample is a set of sample points of neighbouring rvs
         # incoming message should be calculated before this process
+        res = 0
         param = []
-        evidence_idx = []
         flag = True
-        for idx, nb in enumerate(f.nb):
+        for nb in f.nb:
             if nb == rv and flag:
                 param.append((x,))
                 flag = False
             elif nb.value is None:
                 param.append(sample[nb])
             else:
-                param.append((0,))
-                evidence_idx.append(idx)
+                param.append((nb.value,))
 
-        table = []
         for x_join in product(*param):
             m = 0
             for idx, nb in enumerate(f.nb):
                 if nb != rv and nb.value is None:
                     m += self.message[(nb, f)][x_join[idx]]
-            table.append((x_join, e ** m))
+            res += f.potential.get(x_join) * e ** m
 
-        if len(evidence_idx) > 0:
-            res = 0
-            evidence = Counter()
+        return log(res) if res > 0 else -700
 
-            temp = [0] * len(param)
-            pool = random.sample(f.factors, self.n) if len(f.factors) > self.n else f.factors
-            for f_ in pool:
-                for idx in evidence_idx:
-                    temp[idx] = f_.nb[idx].value
-                evidence[tuple(temp)] += 1
-
-            for v, n in evidence.items():
-                temp = 0
-                for row in table:
-                    temp += f.potential.get(row[0] + np.array(v)) * row[1]
-                temp = log(temp) if temp > 0 else -700
-
-                res += temp * n
-
-            return res / len(pool)
-        else:
-            res = 0
-            for row in table:
-                res += f.potential.get(row[0]) * row[1]
-            return log(res) if res > 0 else -700
+    # def message_f_to_rv(self, x, f, rv, sample):
+    #     # sample is a set of sample points of neighbouring rvs
+    #     # incoming message should be calculated before this process
+    #     param = []
+    #     evidence_idx = []
+    #     flag = True
+    #     for idx, nb in enumerate(f.nb):
+    #         if nb == rv and flag:
+    #             param.append((x,))
+    #             flag = False
+    #         elif nb.value is None:
+    #             param.append(sample[nb])
+    #         else:
+    #             param.append((0,))
+    #             evidence_idx.append(idx)
+    #
+    #     table = []
+    #     for x_join in product(*param):
+    #         m = 0
+    #         for idx, nb in enumerate(f.nb):
+    #             if nb != rv and nb.value is None:
+    #                 m += self.message[(nb, f)][x_join[idx]]
+    #         table.append((x_join, e ** m))
+    #
+    #     if len(evidence_idx) > 0:
+    #         res = 0
+    #         evidence = Counter()
+    #
+    #         temp = [0] * len(param)
+    #         pool = random.sample(f.factors, self.n) if len(f.factors) > self.n else f.factors
+    #         for f_ in pool:
+    #             for idx in evidence_idx:
+    #                 temp[idx] = f_.nb[idx].value
+    #             evidence[tuple(temp)] += 1
+    #
+    #         for v, n in evidence.items():
+    #             temp = 0
+    #             for row in table:
+    #                 temp += f.potential.get(row[0] + np.array(v)) * row[1]
+    #             temp = log(temp) if temp > 0 else -700
+    #
+    #             res += temp * n
+    #
+    #         return res / len(pool)
+    #     else:
+    #         res = 0
+    #         for row in table:
+    #             res += f.potential.get(row[0]) * row[1]
+    #         return log(res) if res > 0 else -700
 
     def belief_rv(self, x, rv, sample):
         # sample is a set of sample points of neighbouring rvs
@@ -228,7 +228,7 @@ class HybridLBP:
     # color passing functions
     ###########################
 
-    def split_evidence(self, k=2, iteration=3):
+    def split_evidence(self, k=2, iteration=10):
         temp = set()
         for rv in self.g.continuous_evidence:
             # split evidence
@@ -354,7 +354,7 @@ class HybridLBP:
     def run(self, iteration=10, log_enable=False):
         # initialize cluster
         self.g.init_cluster()
-        self.g.split_evidence(self.k_mean_k, self.k_mean_iteration)
+        # self.g.split_evidence(10, 60)
         self.g.split_factors()
         self.g.split_rvs()
 
@@ -380,10 +380,10 @@ class HybridLBP:
                 time_start = time.clock()
 
             if i > 0:
-                self.split_evidence(self.k_mean_k, self.k_mean_iteration)
-                if log_enable:
-                    print(f'\tevidence {time.clock() - time_start}')
-                    time_start = time.clock()
+                # self.split_evidence(self.k_mean_k, self.k_mean_iteration)
+                # if log_enable:
+                #     print(f'\tevidence {time.clock() - time_start}')
+                #     time_start = time.clock()
 
                 self.split_rvs()
                 if log_enable:

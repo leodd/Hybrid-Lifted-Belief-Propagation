@@ -58,7 +58,7 @@ class SuperRV:
 
         return res
 
-    def split_by_evidence(self, k=2, iteration=3):
+    def split_by_evidence(self, k=2, iteration=10):
         # can only be split into two when it is evidence rv, and there are multiple rvs
         if len(self.rvs) <= 1:
             return {self}
@@ -167,12 +167,6 @@ class CompressedGraph:
         self.continuous_evidence = set()
 
     def init_cluster(self):
-        if type(self.g) is Graph:
-            self.grounded_graph_init()
-        else:
-            self.rel_graph_init()
-
-    def grounded_graph_init(self):
         self.rvs.clear()
         self.factors.clear()
         self.continuous_evidence.clear()
@@ -194,22 +188,15 @@ class CompressedGraph:
                 self.rvs.add(SuperRV(hidden))
             evidence = cluster - hidden
             if len(evidence) != 0:
-                if domain.continuous:
-                    # for continuous evidences, we simply cluster them together
-                    # without considering the actual value
-                    rv = SuperRV(evidence)
-                    self.rvs.add(rv)
-                    self.continuous_evidence.add(rv)
-                else:
-                    # for discrete evidences, we cluster them by their value
-                    value_table = dict()
-                    for e in evidence:
-                        if e.value in value_table:
-                            value_table[e.value].add(e)
-                        else:
-                            value_table[e.value] = {e}
-                    for _, evidence_cluster in value_table.items():
-                        self.rvs.add(SuperRV(evidence_cluster))
+                # for each evidence, we cluster them by their value
+                value_table = dict()
+                for e in evidence:
+                    if e.value in value_table:
+                        value_table[e.value].add(e)
+                    else:
+                        value_table[e.value] = {e}
+                for _, evidence_cluster in value_table.items():
+                    self.rvs.add(SuperRV(evidence_cluster))
 
         # group factors according to potential
         color_table.clear()
@@ -221,61 +208,116 @@ class CompressedGraph:
         for _, cluster in color_table.items():
             self.factors.add(SuperF(cluster))
 
-    def rel_graph_init(self):
-        self.rvs.clear()
-        self.factors.clear()
-        self.continuous_evidence.clear()
+    # def init_cluster(self):
+    #     if type(self.g) is Graph:
+    #         self.grounded_graph_init()
+    #     else:
+    #         self.rel_graph_init()
+    #
+    # def grounded_graph_init(self):
+    #     self.rvs.clear()
+    #     self.factors.clear()
+    #     self.continuous_evidence.clear()
+    #
+    #     # group rvs according to domain
+    #     color_table = dict()
+    #     for rv in self.g.rvs:
+    #         if rv.domain in color_table:
+    #             color_table[rv.domain].add(rv)
+    #         else:
+    #             color_table[rv.domain] = {rv}
+    #     for domain, cluster in color_table.items():
+    #         # split rvs according to if it is hidden
+    #         hidden = set()
+    #         for rv in cluster:
+    #             if rv.value is None:
+    #                 hidden.add(rv)
+    #         if len(hidden) != 0:
+    #             self.rvs.add(SuperRV(hidden))
+    #         evidence = cluster - hidden
+    #         if len(evidence) != 0:
+    #             if domain.continuous:
+    #                 # for continuous evidences, we simply cluster them together
+    #                 # without considering the actual value
+    #                 rv = SuperRV(evidence)
+    #                 self.rvs.add(rv)
+    #                 self.continuous_evidence.add(rv)
+    #             else:
+    #                 # for discrete evidences, we cluster them by their value
+    #                 value_table = dict()
+    #                 for e in evidence:
+    #                     if e.value in value_table:
+    #                         value_table[e.value].add(e)
+    #                     else:
+    #                         value_table[e.value] = {e}
+    #                 for _, evidence_cluster in value_table.items():
+    #                     self.rvs.add(SuperRV(evidence_cluster))
+    #
+    #     # group factors according to potential
+    #     color_table.clear()
+    #     for f in self.g.factors:
+    #         if f.potential in color_table:
+    #             color_table[f.potential].add(f)
+    #         else:
+    #             color_table[f.potential] = {f}
+    #     for _, cluster in color_table.items():
+    #         self.factors.add(SuperF(cluster))
+    #
+    # def rel_graph_init(self):
+    #     self.rvs.clear()
+    #     self.factors.clear()
+    #     self.continuous_evidence.clear()
+    #
+    #     # get the grounding of relational graph
+    #     g, rvs_dict = self.g
+    #
+    #     # group rvs according to their predicate
+    #     predicate_table = dict()
+    #     for key, rv in rvs_dict.items():
+    #         if key[0] in predicate_table:
+    #             predicate_table[key[0]].add(rv)
+    #         else:
+    #             predicate_table[key[0]] = {rv}
+    #
+    #     # assign new cluster for evidence
+    #     for cluster in predicate_table.values():
+    #         hidden = set()
+    #         for rv in cluster:
+    #             if rv.value is None:
+    #                 hidden.add(rv)
+    #         if len(hidden) != 0:
+    #             self.rvs.add(SuperRV(hidden))
+    #
+    #         evidence = cluster - hidden
+    #         if len(evidence) != 0:
+    #             if next(iter(evidence)).domain.continuous:
+    #                 # for continuous evidences, we simply cluster them together
+    #                 # without considering the actual value
+    #                 rv = SuperRV(evidence)
+    #                 self.rvs.add(rv)
+    #                 self.continuous_evidence.add(rv)
+    #             else:
+    #                 # for discrete evidences, we cluster them by their value
+    #                 value_table = dict()
+    #                 for e in evidence:
+    #                     if e.value in value_table:
+    #                         value_table[e.value].add(e)
+    #                     else:
+    #                         value_table[e.value] = {e}
+    #                 for _, evidence_cluster in value_table.items():
+    #                     self.rvs.add(SuperRV(evidence_cluster))
+    #
+    #     # group factors according to potential
+    #     potential_table = dict()
+    #     for f in self.g[0].factors:
+    #         if f.potential in potential_table:
+    #             potential_table[f.potential].add(f)
+    #         else:
+    #             potential_table[f.potential] = {f}
+    #     for _, cluster in potential_table.items():
+    #         self.factors.add(SuperF(cluster))
 
-        # get the grounding of relational graph
-        g, rvs_dict = self.g
-
-        # group rvs according to their predicate
-        predicate_table = dict()
-        for key, rv in rvs_dict.items():
-            if key[0] in predicate_table:
-                predicate_table[key[0]].add(rv)
-            else:
-                predicate_table[key[0]] = {rv}
-
-        # assign new cluster for evidence
-        for cluster in predicate_table.values():
-            hidden = set()
-            for rv in cluster:
-                if rv.value is None:
-                    hidden.add(rv)
-            if len(hidden) != 0:
-                self.rvs.add(SuperRV(hidden))
-
-            evidence = cluster - hidden
-            if len(evidence) != 0:
-                if next(iter(evidence)).domain.continuous:
-                    # for continuous evidences, we simply cluster them together
-                    # without considering the actual value
-                    rv = SuperRV(evidence)
-                    self.rvs.add(rv)
-                    self.continuous_evidence.add(rv)
-                else:
-                    # for discrete evidences, we cluster them by their value
-                    value_table = dict()
-                    for e in evidence:
-                        if e.value in value_table:
-                            value_table[e.value].add(e)
-                        else:
-                            value_table[e.value] = {e}
-                    for _, evidence_cluster in value_table.items():
-                        self.rvs.add(SuperRV(evidence_cluster))
-
-        # group factors according to potential
-        potential_table = dict()
-        for f in self.g[0].factors:
-            if f.potential in potential_table:
-                potential_table[f.potential].add(f)
-            else:
-                potential_table[f.potential] = {f}
-        for _, cluster in potential_table.items():
-            self.factors.add(SuperF(cluster))
-
-    def split_evidence(self, k=2, iteration=3):
+    def split_evidence(self, k=2, iteration=10):
         temp = set()
         for rv in self.continuous_evidence:
             new_rvs = rv.split_by_evidence(k, iteration)

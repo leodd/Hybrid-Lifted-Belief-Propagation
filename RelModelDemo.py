@@ -33,8 +33,8 @@ p2 = GaussianPotential([0., 0.], [[10., 5.], [5., 10.]])
 p3 = GaussianPotential([0., 0.], [[10., 7.], [7., 10.]])
 
 lv_recession = LV(('all',))
-lv_category = LV(instance_category[:50])
-lv_bank = LV(instance_bank[:5])
+lv_category = LV(instance_category[:200])
+lv_bank = LV(instance_bank[:10])
 
 atom_recession = Atom(domain_percentage, logical_variables=(lv_recession,), name='recession')
 atom_market = Atom(domain_percentage, logical_variables=(lv_category,), name='market')
@@ -69,7 +69,7 @@ result_table = np.zeros((len(rvs_table), num_test))
 time_table = []
 
 for i in range(num_test):
-    bp = HybridLBP((g, rvs_table), n=20, step_size=0.4)
+    bp = HybridLBP(g, n=20, step_size=0.4)
     start_time = time.process_time()
     bp.run(15, log_enable=False)
     time_table.append(time.process_time() - start_time)
