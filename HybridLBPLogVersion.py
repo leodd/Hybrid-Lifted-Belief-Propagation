@@ -15,23 +15,21 @@ import time
 class HybridLBP:
     # Hybrid lifted particle belief propagation
 
-    var_threshold = 1.0e-1
+    var_threshold = 1.0e-8
     max_log_value = 700
 
     def __init__(self,
                  g,
                  n=50,
-                 step_size=1.0,
                  k_mean_k=2,
                  k_mean_iteration=10):
         self.g = CompressedGraph(g)
         self.n = n
-        self.step_size = step_size
         self.message = dict()  # log message, message in log space
         self.sample = dict()
         self.q = dict()
+        self.eta_message = dict()  # each site distribution corresponds to a message (factor to variable)
         self.query_cache = dict()
-        self.custom_initial_proposal = self.initial_proposal
         self.k_mean_k = k_mean_k
         self.k_mean_iteration = k_mean_iteration
 
@@ -50,6 +48,12 @@ class HybridLBP:
             mu += sig_ ** -1 * mu_ * count
         sig = sig ** -1
         mu = sig * mu
+        return mu, sig
+
+    @staticmethod
+    def gaussian_division(a, b):
+        sig = a[1] * b[1] / (b[1] - a[1])
+        mu = (a[0] * (b[1] + sig) - b[0] * sig) / b[1]
         return mu, sig
 
     ###########################
@@ -71,48 +75,57 @@ class HybridLBP:
             if rv.value is None and rv.domain.continuous:
                 self.q[rv] = (0, 5)
 
+                count = sum(rv.count.values())  # count the number of incoming messages
+                site = (0, 5 * count)
+
+                for f in rv.nb:
+                    self.eta_message[(f, rv)] = site
+
     def update_proposal(self):
         for rv in self.g.rvs:
             if rv.value is None and rv.domain.continuous:
-                # time_start = time.clock()
                 eta = list()
                 for f in rv.nb:
-                    mu, sig = self.eta_message_f_to_rv(f, rv)
+                    mu, sig = self.eta_approximation(f, rv)
+                    if sig > self.var_threshold:
+                        self.eta_message[(f, rv)] = (mu, sig)
+                    else:
+                        mu, sig = self.eta_message[(f, rv)]
                     eta.append((mu, sig, rv.count[f]))
-                mu, sig = self.gaussian_product(*eta)
-                old_mu, old_sig = self.q[rv]
-                mu = old_mu + self.step_size * (mu - old_mu)
-                sig = old_sig + self.step_size * (sig - old_sig)
-                sig = max(sig, self.var_threshold)
-                # print(f'{(old_mu, old_sig)} -> {(mu, sig)}')
-                self.q[rv] = (mu, sig)
+                # old_q = self.q[rv]
+                self.q[rv] = self.gaussian_product(*eta)
+                # print(f'{old_q} -> {self.q[rv]}')
+
+    def eta_approximation(self, f, rv):
+        # compute the cavity distribution
+        cavity = self.gaussian_division(self.q[rv], self.eta_message[(f, rv)])
+
+        # compute the momentum of tilted distribution
+        weight = []
+        mu = 0
+        sig = 0
+
+        param = (cavity[0], sqrt(cavity[1]))
+        for x in rv.domain.integral_points:
+            weight.append(e ** self.message[(f, rv)][x] * norm(*param).pdf(x))
+
+        z = sum(weight)
+
+        for w, x in zip(weight, rv.domain.integral_points):
+            mu += w * x
+            sig += w * x ** 2
+
+        mu = mu / z
+        sig = sig / z - mu ** 2
+
+        # approximate eta
+        return self.gaussian_division((mu, sig), cavity)
 
     def important_weight(self, x, rv):
         if rv.value is None and rv.domain.continuous:
             return 1 / norm(self.q[rv][0], sqrt(self.q[rv][1])).pdf(x)
         else:
             return 1
-
-    def eta_message_f_to_rv(self, f, rv):
-        # eta_message is the gaussian approximation of the particle message
-        # the return is a tuple of mean and variance
-        weight = []
-        mu = 0
-        var = 0
-
-        for x in rv.domain.integral_points:
-            weight.append(e ** self.message[(f, rv)][x])
-
-        z = sum(weight)
-
-        for w, x in zip(weight, rv.domain.integral_points):
-            mu += w * x
-            var += w * x ** 2
-
-        mu = mu / z
-        var = var / z - mu ** 2
-
-        return mu, (var if var > self.var_threshold else self.var_threshold)
 
     def message_rv_to_f(self, x, rv, f):
         # the incoming message on x must be calculated before calculating the out going message
@@ -252,6 +265,7 @@ class HybridLBP:
                     if new_rv.value is None:
                         for f in new_rv.nb:
                             self.message[(f, new_rv)] = self.message[(f, rv)]
+                            self.eta_message[(f, new_rv)] = self.eta_message[(f, rv)]
                         # update proposal
                         self.q[new_rv] = self.q[rv]
                         # update sample
@@ -272,6 +286,7 @@ class HybridLBP:
                 for rv in new_f.nb:
                     if rv.value is None:
                         self.message[(rv, new_f)] = self.message[(rv, f)]
+                        self.eta_message[(new_f, rv)] = self.eta_message[(f, rv)]
 
             temp |= new_fs
 
@@ -359,7 +374,7 @@ class HybridLBP:
         self.g.split_rvs()
 
         # initialize proposal
-        self.custom_initial_proposal()
+        self.initial_proposal()
 
         # poll sample from the initial distribution
         self.sample = self.generate_sample()

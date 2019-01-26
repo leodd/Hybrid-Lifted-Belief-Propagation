@@ -16,14 +16,13 @@ class EPBP:
     var_threshold = 1.0e-1
     max_log_value = 700
 
-    def __init__(self, g=None, n=50, step_size=0.3):
+    def __init__(self, g=None, n=50):
         self.g = g
         self.n = n
-        self.step_size = step_size
         self.message = dict()  # log message, message in log space
         self.sample = dict()
         self.q = dict()
-        self.custom_initial_proposal = self.initial_proposal
+        self.eta_message = dict()
 
     @staticmethod
     def gaussian_product(*gaussian):
@@ -38,6 +37,11 @@ class EPBP:
         mu = sig * mu
         return mu, sig
 
+    def gaussian_division(self, a, b):
+        sig = max(a[1] * b[1] / (b[1] - a[1]), self.var_threshold)
+        mu = (a[0] * (b[1] + sig) - b[0] * sig) / b[1]
+        return mu, sig
+
     def generate_sample(self):
         sample = dict()
         for rv in self.g.rvs:
@@ -47,28 +51,74 @@ class EPBP:
                 sample[rv] = (rv.value,)
         return sample
 
+    # def initial_proposal(self):
+    #     for rv in self.g.rvs:
+    #         if rv.value is None:
+    #             self.q[rv] = (0, 2)
+    #         else:
+    #             self.q[rv] = None
+    #
+    # def update_proposal(self):
+    #     for rv in self.g.rvs:
+    #         if rv.value is None:
+    #             eta = list()
+    #             for f in rv.nb:
+    #                 mu, sig = self.eta_message_f_to_rv(f, rv)
+    #                 eta.append((mu, sig))
+    #             mu, sig = self.gaussian_product(*eta)
+    #             old_mu, old_sig = self.q[rv]
+    #             mu = old_mu + self.step_size * (mu - old_mu)
+    #             sig = old_sig + self.step_size * (sig - old_sig)
+    #             sig = max(sig, self.var_threshold)
+    #             self.q[rv] = (mu, sig)
+    #         else:
+    #             self.q[rv] = None
+
     def initial_proposal(self):
         for rv in self.g.rvs:
             if rv.value is None:
-                self.q[rv] = (0, 2)
-            else:
-                self.q[rv] = None
+                self.q[rv] = (0, 5)
+
+                count = len(rv.nb)  # count the number of incoming messages
+                site = (0, 5 * count)
+
+                for f in rv.nb:
+                    self.eta_message[(f, rv)] = site
 
     def update_proposal(self):
         for rv in self.g.rvs:
-            if rv.value is None:
+            if rv.value is None and rv.domain.continuous:
                 eta = list()
                 for f in rv.nb:
-                    mu, sig = self.eta_message_f_to_rv(f, rv)
+                    mu, sig = self.eta_approximation(f, rv)
+                    self.eta_message[(f, rv)] = (mu, sig)
                     eta.append((mu, sig))
-                mu, sig = self.gaussian_product(*eta)
-                old_mu, old_sig = self.q[rv]
-                mu = old_mu + self.step_size * (mu - old_mu)
-                sig = old_sig + self.step_size * (sig - old_sig)
-                sig = max(sig, self.var_threshold)
-                self.q[rv] = (mu, sig)
-            else:
-                self.q[rv] = None
+                self.q[rv] = self.gaussian_product(*eta)
+
+    def eta_approximation(self, f, rv):
+        # compute the cavity distribution
+        cavity = self.gaussian_division(self.q[rv], self.eta_message[(f, rv)])
+
+        # compute the momentum of tilted distribution
+        weight = []
+        mu = 0
+        sig = 0
+
+        param = (cavity[0], sqrt(cavity[1]))
+        for x in rv.domain.integral_points:
+            weight.append(e ** self.message[(f, rv)][x] * norm(*param).pdf(x))
+
+        z = sum(weight)
+
+        for w, x in zip(weight, rv.domain.integral_points):
+            mu += w * x
+            sig += w * x ** 2
+
+        mu = mu / z
+        sig = sig / z - mu ** 2
+
+        # approximate eta
+        return self.gaussian_division((mu, sig), cavity)
 
     def important_weight(self, x, rv):
         if rv.value is None:
@@ -155,7 +205,7 @@ class EPBP:
 
     def run(self, iteration=10, log_enable=False):
         # initialize proposal
-        self.custom_initial_proposal()
+        self.initial_proposal()
 
         # poll sample from the initial distribution
         self.sample = self.generate_sample()
