@@ -15,7 +15,7 @@ import time
 class HybridLBP:
     # Hybrid lifted particle belief propagation
 
-    var_threshold = 1.0e-8
+    var_threshold = 5
     max_log_value = 700
 
     def __init__(self,
@@ -27,6 +27,7 @@ class HybridLBP:
         self.n = n
         self.message = dict()  # log message, message in log space
         self.sample = dict()
+        self.old_sample = dict()
         self.q = dict()
         self.eta_message = dict()  # each site distribution corresponds to a message (factor to variable)
         self.query_cache = dict()
@@ -85,9 +86,11 @@ class HybridLBP:
         for rv in self.g.rvs:
             if rv.value is None and rv.domain.continuous:
                 eta = list()
+                min_sig = sum(rv.count.values()) * self.var_threshold
                 for f in rv.nb:
                     mu, sig = self.eta_approximation(f, rv)
-                    if sig > self.var_threshold:
+                    if 0 < sig < Inf:
+                        sig = max(sig, min_sig)
                         self.eta_message[(f, rv)] = (mu, sig)
                     else:
                         mu, sig = self.eta_message[(f, rv)]
@@ -107,7 +110,7 @@ class HybridLBP:
 
         param = (cavity[0], sqrt(cavity[1]))
         for x in rv.domain.integral_points:
-            weight.append(e ** self.message[(f, rv)][x] * norm(*param).pdf(x))
+            weight.append(e ** self.message_f_to_rv(x, f, rv, self.old_sample) * norm(*param).pdf(x))
 
         z = sum(weight)
 
@@ -369,7 +372,7 @@ class HybridLBP:
     def run(self, iteration=10, log_enable=False):
         # initialize cluster
         self.g.init_cluster()
-        # self.g.split_evidence(10, 60)
+        # self.g.split_evidence(5, 50)
         self.g.split_factors()
         self.g.split_rvs()
 
@@ -421,19 +424,13 @@ class HybridLBP:
                 time_start = time.clock()
 
             if i < iteration - 1:
-                # update proposal
-                self.update_proposal()
-                if log_enable:
-                    print(f'\tproposal {time.clock() - time_start}')
-                    time_start = time.clock()
-
                 self.split_factors()
                 if log_enable:
                     print(f'\tsplit factor {time.clock() - time_start}')
                     time_start = time.clock()
 
                 # poll new sample
-                old_sample = self.sample
+                self.old_sample = self.sample
                 self.sample = self.generate_sample()
 
                 # calculate messages from f to rv
@@ -443,15 +440,16 @@ class HybridLBP:
                             # compute the message for each sample point
                             m = dict()
                             for point in self.sample[rv]:
-                                m[point] = self.message_f_to_rv(point, f, rv, old_sample)
-                            # compute the eta message for each integral point
-                            eta_m = dict()
-                            for point in rv.domain.integral_points:
-                                eta_m[point] = self.message_f_to_rv(point, f, rv, old_sample)
-                            self.log_message_balance(eta_m)
-                            self.message[(f, rv)] = {**m, **eta_m}
+                                m[point] = self.message_f_to_rv(point, f, rv, self.old_sample)
+                            self.message[(f, rv)] = m
 
                 if log_enable:
                     print(f'\tf to rv {time.clock() - time_start}')
+                    time_start = time.clock()
+
+                # update proposal
+                self.update_proposal()
+                if log_enable:
+                    print(f'\tproposal {time.clock() - time_start}')
 
         self.split_factors()

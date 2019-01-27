@@ -13,7 +13,7 @@ import time
 class EPBP:
     # Expectation particle belief propagation
 
-    var_threshold = 1.0e-1
+    var_threshold = 2
     max_log_value = 700
 
     def __init__(self, g=None, n=50):
@@ -37,8 +37,9 @@ class EPBP:
         mu = sig * mu
         return mu, sig
 
-    def gaussian_division(self, a, b):
-        sig = max(a[1] * b[1] / (b[1] - a[1]), self.var_threshold)
+    @staticmethod
+    def gaussian_division(a, b):
+        sig = a[1] * b[1] / (b[1] - a[1])
         mu = (a[0] * (b[1] + sig) - b[0] * sig) / b[1]
         return mu, sig
 
@@ -50,29 +51,6 @@ class EPBP:
             else:
                 sample[rv] = (rv.value,)
         return sample
-
-    # def initial_proposal(self):
-    #     for rv in self.g.rvs:
-    #         if rv.value is None:
-    #             self.q[rv] = (0, 2)
-    #         else:
-    #             self.q[rv] = None
-    #
-    # def update_proposal(self):
-    #     for rv in self.g.rvs:
-    #         if rv.value is None:
-    #             eta = list()
-    #             for f in rv.nb:
-    #                 mu, sig = self.eta_message_f_to_rv(f, rv)
-    #                 eta.append((mu, sig))
-    #             mu, sig = self.gaussian_product(*eta)
-    #             old_mu, old_sig = self.q[rv]
-    #             mu = old_mu + self.step_size * (mu - old_mu)
-    #             sig = old_sig + self.step_size * (sig - old_sig)
-    #             sig = max(sig, self.var_threshold)
-    #             self.q[rv] = (mu, sig)
-    #         else:
-    #             self.q[rv] = None
 
     def initial_proposal(self):
         for rv in self.g.rvs:
@@ -89,11 +67,18 @@ class EPBP:
         for rv in self.g.rvs:
             if rv.value is None and rv.domain.continuous:
                 eta = list()
+                min_sig = len(rv.nb) * self.var_threshold
                 for f in rv.nb:
                     mu, sig = self.eta_approximation(f, rv)
-                    self.eta_message[(f, rv)] = (mu, sig)
-                    eta.append((mu, sig))
+                    if 0 < sig < Inf:
+                        sig = max(sig, min_sig)
+                        self.eta_message[(f, rv)] = (mu, sig)
+                    else:
+                        mu, sig = self.eta_message[(f, rv)]
+                    eta.append((mu, sig, rv.count[f]))
+                # old_q = self.q[rv]
                 self.q[rv] = self.gaussian_product(*eta)
+                # print(f'{old_q} -> {self.q[rv]}')
 
     def eta_approximation(self, f, rv):
         # compute the cavity distribution
@@ -125,27 +110,6 @@ class EPBP:
             return 1 / norm(self.q[rv][0], sqrt(self.q[rv][1])).pdf(x)
         else:
             return 1
-
-    def eta_message_f_to_rv(self, f, rv):
-        # eta_message is the gaussian approximation of the particle message
-        # the return is a tuple of mean and variance
-        weight = []
-        mu = 0
-        var = 0
-
-        for x in rv.domain.integral_points:
-            weight.append(e ** self.message[(f, rv)][x])
-
-        z = sum(weight)
-
-        for w, x in zip(weight, rv.domain.integral_points):
-            mu += w * x
-            var += w * x ** 2
-
-        mu = mu / z
-        var = var / z - mu ** 2
-
-        return mu, (var if var > self.var_threshold else self.var_threshold)
 
     def message_rv_to_f(self, x, rv, f):
         # the incoming message on x must be calculated before calculating the out going message
@@ -238,12 +202,6 @@ class EPBP:
                 time_start = time.clock()
 
             if i < iteration - 1:
-                # update proposal
-                self.update_proposal()
-                if log_enable:
-                    print(f'\tproposal {time.clock() - time_start}')
-                    time_start = time.clock()
-
                 # poll new sample
                 old_sample = self.sample
                 self.sample = self.generate_sample()
@@ -265,6 +223,12 @@ class EPBP:
 
                 if log_enable:
                     print(f'\tf to rv {time.clock() - time_start}')
+                    time_start = time.clock()
+
+                # update proposal
+                self.update_proposal()
+                if log_enable:
+                    print(f'\tproposal {time.clock() - time_start}')
 
     def belief(self, x, rv):
         if rv.value is None:
