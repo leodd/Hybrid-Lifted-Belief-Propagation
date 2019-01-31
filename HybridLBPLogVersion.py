@@ -1,5 +1,5 @@
 from CompressedGraph import *
-from numpy import Inf
+from numpy import Inf, exp
 from scipy.integrate import quad
 from scipy.stats import norm
 from scipy.optimize import fmin
@@ -57,6 +57,12 @@ class HybridLBP:
         mu = (a[0] * (b[1] + sig) - b[0] * sig) / b[1]
         return mu, sig
 
+    @staticmethod
+    def norm_pdf(x, mu, sig):
+        u = (x - mu) / sig
+        y = exp(-u * u * 0.5) / (2.506628274631 * sig)
+        return y
+
     ###########################
     # EPBP functions
     ###########################
@@ -110,7 +116,7 @@ class HybridLBP:
 
         param = (cavity[0], sqrt(cavity[1]))
         for x in rv.domain.integral_points:
-            weight.append(e ** self.message_f_to_rv(x, f, rv, self.old_sample) * norm(*param).pdf(x))
+            weight.append(e ** self.message[(f, rv)][x] * self.norm_pdf(x, *param))
 
         z = sum(weight)
 
@@ -126,7 +132,7 @@ class HybridLBP:
 
     def important_weight(self, x, rv):
         if rv.value is None and rv.domain.continuous:
-            return 1 / norm(self.q[rv][0], sqrt(self.q[rv][1])).pdf(x)
+            return 1 / self.norm_pdf(x, self.q[rv][0], sqrt(self.q[rv][1]))
         else:
             return 1
 
@@ -440,6 +446,8 @@ class HybridLBP:
                             # compute the message for each sample point
                             m = dict()
                             for point in self.sample[rv]:
+                                m[point] = self.message_f_to_rv(point, f, rv, self.old_sample)
+                            for point in rv.domain.integral_points:
                                 m[point] = self.message_f_to_rv(point, f, rv, self.old_sample)
                             self.message[(f, rv)] = m
 

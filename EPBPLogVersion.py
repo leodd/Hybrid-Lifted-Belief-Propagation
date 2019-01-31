@@ -1,5 +1,5 @@
 from Graph import *
-from numpy import Inf, linspace
+from numpy import Inf, exp
 from scipy.integrate import quad
 from scipy.stats import norm
 from scipy.optimize import fmin
@@ -42,6 +42,12 @@ class EPBP:
         sig = a[1] * b[1] / (b[1] - a[1])
         mu = (a[0] * (b[1] + sig) - b[0] * sig) / b[1]
         return mu, sig
+
+    @staticmethod
+    def norm_pdf(x, mu, sig):
+        u = (x - mu) / sig
+        y = exp(-u * u * 0.5) / (2.506628274631 * sig)
+        return y
 
     def generate_sample(self):
         sample = dict()
@@ -91,7 +97,7 @@ class EPBP:
 
         param = (cavity[0], sqrt(cavity[1]))
         for x in rv.domain.integral_points:
-            weight.append(e ** self.message[(f, rv)][x] * norm(*param).pdf(x))
+            weight.append(e ** self.message[(f, rv)][x] * self.norm_pdf(x, *param))
 
         z = sum(weight)
 
@@ -107,7 +113,7 @@ class EPBP:
 
     def important_weight(self, x, rv):
         if rv.value is None:
-            return 1 / norm(self.q[rv][0], sqrt(self.q[rv][1])).pdf(x)
+            return 1 / self.norm_pdf(x, self.q[rv][0], sqrt(self.q[rv][1]))
         else:
             return 1
 
