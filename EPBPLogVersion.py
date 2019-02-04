@@ -13,7 +13,7 @@ import time
 class EPBP:
     # Expectation particle belief propagation
 
-    var_threshold = 2
+    var_threshold = 5
     max_log_value = 700
 
     def __init__(self, g=None, n=50):
@@ -81,7 +81,7 @@ class EPBP:
                         self.eta_message[(f, rv)] = (mu, sig)
                     else:
                         mu, sig = self.eta_message[(f, rv)]
-                    eta.append((mu, sig, rv.count[f]))
+                    eta.append((mu, sig))
                 # old_q = self.q[rv]
                 self.q[rv] = self.gaussian_product(*eta)
                 # print(f'{old_q} -> {self.q[rv]}')

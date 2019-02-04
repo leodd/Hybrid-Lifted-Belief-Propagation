@@ -40,9 +40,8 @@ class RV:
 
 
 class F:
-    def __init__(self, potential, nb=None, symmetric=False):
+    def __init__(self, potential, nb=None):
         self.potential = potential
-        self.symmetric = symmetric
         if nb is None:
             self.nb = []
         else:

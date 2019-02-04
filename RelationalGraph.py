@@ -26,19 +26,30 @@ class Atom:
         return tuple(res)
 
 
+class ParamF:
+    # parametric factor
+    def __init__(self, potential, nb=None, constrain=None):
+        self.potential = potential
+        self.constrain = constrain
+        if nb is None:
+            self.nb = []
+        else:
+            self.nb = nb
+
+
 class RelationalGraph:
     def __init__(self):
         self.lvs = set()
-        self.rvs = set()
-        self.factors = set()
+        self.atoms = set()
+        self.param_factors = set()
         self.data = dict()  # format: key=(RelationalAtom, LV1_instance, LV2_instance, ... ) value=True or 0.01 etc.
 
     def init_nb(self):
-        for rv in self.rvs:
-            rv.nb = []
-        for f in self.factors:
-            for rv in f.nb:
-                rv.nb.append(f)
+        for atom in self.atoms:
+            atom.nb = []
+        for f in self.param_factors:
+            for atom in f.nb:
+                atom.nb.append(f)
 
     @staticmethod
     def lvs_iter(lvs):
@@ -55,36 +66,30 @@ class RelationalGraph:
         grounded_rvs_table = dict()
 
         # ground all relational atoms
-        for rv in self.rvs:
-            if type(rv) is Atom:
-                for substitution in self.lvs_iter(rv.lvs):
-                    key = rv.key(substitution)
-                    value = self.data[key] if key in self.data else None
-                    grounding = RV(rv.domain, value)
-                    grounded_rvs_table[key] = grounding
-                    grounded_rvs.append(grounding)
-            else:
-                grounded_rvs.append(rv)
+        for atom in self.atoms:
+            for substitution in self.lvs_iter(atom.lvs):
+                key = atom.key(substitution)
+                value = self.data[key] if key in self.data else None
+                grounding = RV(atom.domain, value)
+                grounded_rvs_table[key] = grounding
+                grounded_rvs.append(grounding)
 
         # add factors
-        for f in self.factors:
+        for param_f in self.param_factors:
             # collect lvs of neighboring atom
             lvs = set()
-            for rv in f.nb:
-                if type(rv) is Atom:
-                    lvs.update(rv.lvs)
+            for atom in param_f.nb:
+                lvs.update(atom.lvs)
             lvs = tuple(lvs)
 
             # enumerate all groundings and create a factor for each grounding
             for substitution in self.lvs_iter(lvs):
-                # collect neighboring rv instances
-                nb = []
-                for rv in f.nb:
-                    if type(rv) is Atom:
-                        nb.append(grounded_rvs_table[rv.key(substitution)])
-                    else:
-                        nb.append(rv)
-                grounded_factors.append(F(f.potential, nb))
+                if param_f.constrain is None or param_f.constrain(substitution):
+                    # collect neighboring rv instances
+                    nb = []
+                    for atom in param_f.nb:
+                        nb.append(grounded_rvs_table[atom.key(substitution)])
+                    grounded_factors.append(F(param_f.potential, nb))
 
         grounded_graph = Graph()
         grounded_graph.rvs = grounded_rvs

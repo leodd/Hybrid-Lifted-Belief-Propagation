@@ -33,21 +33,21 @@ p2 = GaussianPotential([0., 0.], [[10., 5.], [5., 10.]])
 p3 = GaussianPotential([0., 0.], [[10., 7.], [7., 10.]])
 
 lv_recession = LV(('all',))
-lv_category = LV(instance_category[:50])
-lv_bank = LV(instance_bank[:5])
+lv_category = LV(instance_category[:100])
+lv_bank = LV(instance_bank[:10])
 
 atom_recession = Atom(domain_percentage, logical_variables=(lv_recession,), name='recession')
 atom_market = Atom(domain_percentage, logical_variables=(lv_category,), name='market')
 atom_loss = Atom(domain_billion, logical_variables=(lv_category, lv_bank), name='loss')
 atom_revenue = Atom(domain_billion, logical_variables=(lv_bank,), name='revenue')
 
-f1 = F(p1, nb=(atom_recession, atom_market))
-f2 = F(p2, nb=(atom_market, atom_loss))
-f3 = F(p3, nb=(atom_loss, atom_revenue))
+f1 = ParamF(p1, nb=(atom_recession, atom_market))
+f2 = ParamF(p2, nb=(atom_market, atom_loss))
+f3 = ParamF(p3, nb=(atom_loss, atom_revenue))
 
 rel_g = RelationalGraph()
-rel_g.rvs = (atom_recession, atom_revenue, atom_loss, atom_market)
-rel_g.factors = (f1, f2, f3)
+rel_g.atoms = (atom_recession, atom_revenue, atom_loss, atom_market)
+rel_g.param_factors = (f1, f2, f3)
 rel_g.data = data
 
 rel_g.init_nb()
@@ -64,14 +64,14 @@ j = 0
 for key in rvs_table:
     key_table.append(key)
     j += 1
-num_test = 1
+num_test = 2
 result_table = np.zeros((len(rvs_table), num_test))
 time_table = []
 
 for i in range(num_test):
     bp = HybridLBP(g, n=20)
     start_time = time.process_time()
-    bp.run(15, log_enable=True)
+    bp.run(15, log_enable=False)
     time_table.append(time.process_time() - start_time)
 
     j = 0
@@ -94,9 +94,13 @@ bp.run(20, log_enable=False)
 #     print(key, bp.map(rv))
 
 i = 0
+err_history = list()
 for key, rv in rvs_table.items():
     ans = bp.map(rv)
     err = result_table[i] - ans
     mean_l1_err = np.average(abs(err))
+    err_history.append(mean_l1_err)
     print(key, np.average(result_table[i]), mean_l1_err)
     i += 1
+print('average err', np.average(err_history))
+print('max err', np.max(err_history))
