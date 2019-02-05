@@ -10,8 +10,10 @@ import time
 cluster_mat = scipy.io.loadmat('Data/cluster_NcutDiscrete.mat')['NcutDiscrete']
 well_t = scipy.io.loadmat('Data/well_t.mat')['well_t']
 
+well_t = well_t[:, 200:]
+
 cluster_id = [0, 1]
-t = 4
+t = 100
 
 cluster = []
 for i in cluster_id:
@@ -23,6 +25,8 @@ for c_id, c in zip(cluster_id, cluster):
         for i in range(t):
             if well_t[well_id, i] != 5000:
                 data[(c_id, well_id, i)] = well_t[well_id, i]
+
+print(data)
 
 domain = Domain((-100, 150), continuous=True, integral_points=linspace(-100, 150, 50))
 
@@ -42,13 +46,13 @@ class GaussianPotential(Potential):
         self.sig = sig * 2
 
     def get(self, parameters):
-        return np.e ** ((parameters[1] - self.coeff * parameters[0]) ** 2 / self.sig )
+        return np.exp(-(parameters[1] - self.coeff * parameters[0]) ** 2 / self.sig )
 
 
-pairwise_p = GaussianPotential(1, 5)
-observe_p = GaussianPotential(1, 2)
-indirect_observe_p = GaussianPotential(1, 1)
-transition_p = GaussianPotential(1, 3)
+pairwise_p = GaussianPotential(1, 50)
+observe_p = GaussianPotential(1, 25)
+indirect_observe_p = GaussianPotential(1, 500)
+transition_p = GaussianPotential(1, 20)
 
 pairwise_factor = ParamF(pairwise_p, [atoms[0], atoms[1]])
 
@@ -71,7 +75,7 @@ for rv in g.rvs:
 print('number of evidence', num_evidence)
 
 bp = HybridLBP(g, n=20)
-bp.run(15, log_enable=False)
+bp.run(20, log_enable=False)
 
-for key, rv in rvs_table[t].items():
+for key, rv in rvs_table[t-1].items():
     print(key, bp.map(rv))
