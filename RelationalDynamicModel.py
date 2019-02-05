@@ -9,8 +9,9 @@ class RelationalDynamicModel:
         self.atoms = set()
         self.pairwise_factors = set()
         self.observe_potentials = dict()  # atom.name: potential(x, o)
+        self.indirect_observe_potentials = dict()  # atom.name: potential(x, o)
         self.transition_potentials = dict()  # atom.name: potential(x_t, x_t+1)
-        self.data = dict()
+        self.data = dict()  # (atom.name, instance, t): value
 
     def init_nb(self):
         for atom in self.atoms:
@@ -27,7 +28,7 @@ class RelationalDynamicModel:
         for combination in product(*table):
             yield dict(zip(lvs, combination))
 
-    def grounded_dynamic_model(self, t):
+    def grounded_graph(self, t):
         grounded_rvs = []
         grounded_factors = []
 
@@ -36,22 +37,39 @@ class RelationalDynamicModel:
             grounded_rvs_table.append(dict())
 
         # ground all relational atoms
-        for atom in self.atoms:
-            for substitution in self.lvs_iter(atom.lvs):
-                key = atom.key(substitution)
+        for i in range(t):
+            for atom in self.atoms:
+                rvs_table = dict()
+                obs_table = dict()
 
-                for i in range(t):
+                for substitution in self.lvs_iter(atom.lvs):
+                    key = atom.key(substitution)
+
                     grounding = RV(atom.domain, None)
                     grounded_rvs.append(grounding)
                     grounded_rvs_table[i][key] = grounding
+                    rvs_table[key] = grounding
 
                     key_t = (*key, i)  # key + time
                     if key_t in self.data:
-                        # add observe node and factor
+                        # add observe node
                         observe = RV(atom.domain, self.data[key_t])
                         grounded_rvs.append(observe)
-                        observe_potential = self.observe_potentials[atom.name]
-                        grounded_factors.append(F(observe_potential, [grounding, observe]))
+                        obs_table[key] = observe
+
+                # add direct and indirect observe factors
+                obs_potential = self.observe_potentials[atom.name]
+                indirect_obs_potential = self.indirect_observe_potentials[atom.name]
+                for obs_key in obs_table:
+                    for rv_key in rvs_table:
+                        if obs_key == rv_key:
+                            grounded_factors.append(
+                                F(obs_potential, [rvs_table[rv_key], obs_table[obs_key]])
+                            )
+                        else:
+                            grounded_factors.append(
+                                F(indirect_obs_potential, [rvs_table[rv_key], obs_table[obs_key]])
+                            )
 
         # add transition factors
         for key in grounded_rvs_table[0]:
