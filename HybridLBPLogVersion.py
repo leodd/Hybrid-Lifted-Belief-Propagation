@@ -132,7 +132,7 @@ class HybridLBP:
 
     def important_weight(self, x, rv):
         if rv.value is None and rv.domain.continuous:
-            return 1 / self.norm_pdf(x, self.q[rv][0], sqrt(self.q[rv][1]))
+            return 1 / max(self.norm_pdf(x, self.q[rv][0], sqrt(self.q[rv][1])), 1e-200)
         else:
             return 1
 
@@ -167,6 +167,9 @@ class HybridLBP:
             for idx, nb in enumerate(f.nb):
                 if nb != rv and nb.value is None:
                     m += self.message[(nb, f)][x_join[idx]]
+                    if m > 700: print(m, idx, len(f.nb))
+            if m > 700:
+                print(m)
             res += f.potential.get(x_join) * e ** m
 
         return log(res) if res > 0 else -700
@@ -232,11 +235,14 @@ class HybridLBP:
     def log_message_balance(self, message):
         values = message.values()
         shift = mean(values)
-        max_m = max(values) - shift
+        max_m = max(values)
         if max_m > self.max_log_value:
             shift = max_m - self.max_log_value
         for k, v in message.items():
             message[k] = v - shift
+        max_m = max(message.values())
+        if max_m > 700:
+            print(message)
 
     @staticmethod
     def message_normalization(message):
