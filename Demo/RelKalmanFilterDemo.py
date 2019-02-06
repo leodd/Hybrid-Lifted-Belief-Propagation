@@ -13,7 +13,7 @@ well_t = scipy.io.loadmat('Data/well_t.mat')['well_t']
 well_t = well_t[:, 200:]
 
 cluster_id = [0, 1]
-t = 100
+t = 10
 
 cluster = []
 for i in cluster_id:
@@ -26,7 +26,7 @@ for c_id, c in zip(cluster_id, cluster):
             if well_t[well_id, i] != 5000:
                 data[(c_id, well_id, i)] = well_t[well_id, i]
 
-# print(data)
+print(data)
 
 domain = Domain((-100, 150), continuous=True, integral_points=linspace(-100, 150, 50))
 
@@ -74,13 +74,15 @@ for rv in g.rvs:
         num_evidence += 1
 print('number of evidence', num_evidence)
 
-bp = HybridLBP(g, n=20)
-bp.run(20, log_enable=False)
+start_time = time.time()
+bp = HybridLBP(g, n=100)
+bp.run(5, log_enable=False)
+print('time lapse', time.time() - start_time)
 
 result = []
 for i in range(t):
     temp = []
-    for key, rv in rvs_table[t - 1].items():
+    for key, rv in rvs_table[i].items():
         # print(key, bp.map(rv))
         temp.append([key, bp.map(rv)])
     result.append(temp)

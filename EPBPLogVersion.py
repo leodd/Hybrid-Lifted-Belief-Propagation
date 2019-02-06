@@ -113,7 +113,7 @@ class EPBP:
 
     def important_weight(self, x, rv):
         if rv.value is None:
-            return 1 / self.norm_pdf(x, self.q[rv][0], sqrt(self.q[rv][1]))
+            return max(self.norm_pdf(x, self.q[rv][0], sqrt(self.q[rv][1])), 1e-200)
         else:
             return 1
 
@@ -158,10 +158,12 @@ class EPBP:
 
     def log_message_balance(self, message):
         values = message.values()
-        shift = mean(values)
-        max_m = max(values) - shift
-        if max_m > self.max_log_value:
+        mean_m = mean(values)
+        max_m = max(values)
+        if max_m - mean_m > self.max_log_value:
             shift = max_m - self.max_log_value
+        else:
+            shift = mean_m
         for k, v in message.items():
             message[k] = v - shift
 
