@@ -1,6 +1,6 @@
 from RelationalGraph import *
 from Potential import GaussianPotential
-from HybridLBPLogVersion import HybridLBP
+from HybridLBPC2F import HybridLBP
 from EPBPLogVersion import EPBP
 from GaBP import GaBP
 import numpy as np
@@ -64,7 +64,7 @@ j = 0
 for key in rvs_table:
     key_table.append(key)
     j += 1
-num_test = 2
+num_test = 1
 result_table = np.zeros((len(rvs_table), num_test))
 time_table = []
 

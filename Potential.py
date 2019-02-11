@@ -30,6 +30,26 @@ class GaussianPotential(Potential):
         return self.coefficient * pow(e, -0.5 * (x_mu * self.inv * x_mu.T))
 
 
+class LinearGaussianPotential(Potential):
+    def __init__(self, coeff, sig):
+        Potential.__init__(self, symmetric=False)
+        self.coeff = coeff
+        self.sig = sig * 2
+
+    def get(self, parameters):
+        return np.exp(-(parameters[1] - self.coeff * parameters[0]) ** 2 / self.sig)
+
+    def __hash__(self):
+        return hash((self.coeff, self.sig))
+
+    def __eq__(self, other):
+        return (
+            self.__class__ == other.__class__ and
+            self.coeff == other.coeff and
+            self.sig == other.sig
+        )
+
+
 class ImageNodePotential(Potential):
     def __init__(self, mu, sig):
         Potential.__init__(self, symmetric=True)

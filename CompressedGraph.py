@@ -48,10 +48,13 @@ class SuperRV:
 
         # reuse THIS instance
         self.rvs = clusters[next(i)]
+        if self.value is not None:
+            self.value = self.get_value(self.rvs)
         res.add(self)
 
         for _ in range(1, len(clusters)):
-            res.add(SuperRV(clusters[next(i)], self.domain, self.value))
+            new_rv = SuperRV(clusters[next(i)], self.domain, None)
+            res.add(new_rv)
 
         for rv in res:
             rv.update_nb()
@@ -166,7 +169,7 @@ class CompressedGraph:
         self.factors = set()
         self.continuous_evidence = set()
 
-    def init_cluster(self):
+    def init_cluster(self, is_split_cont_evidence=True):
         self.rvs.clear()
         self.factors.clear()
         self.continuous_evidence.clear()
@@ -188,15 +191,22 @@ class CompressedGraph:
                 self.rvs.add(SuperRV(hidden))
             evidence = cluster - hidden
             if len(evidence) != 0:
-                # for each evidence, we cluster them by their value
-                value_table = dict()
-                for e in evidence:
-                    if e.value in value_table:
-                        value_table[e.value].add(e)
-                    else:
-                        value_table[e.value] = {e}
-                for _, evidence_cluster in value_table.items():
-                    self.rvs.add(SuperRV(evidence_cluster))
+                if not is_split_cont_evidence and domain.continuous:
+                    # for continuous evidences, we simply cluster them together
+                    # without considering the actual value
+                    rv = SuperRV(evidence)
+                    self.rvs.add(rv)
+                    self.continuous_evidence.add(rv)
+                else:
+                    # for each evidence, we cluster them by their value
+                    value_table = dict()
+                    for e in evidence:
+                        if e.value in value_table:
+                            value_table[e.value].add(e)
+                        else:
+                            value_table[e.value] = {e}
+                    for _, evidence_cluster in value_table.items():
+                        self.rvs.add(SuperRV(evidence_cluster))
 
         # group factors according to potential
         color_table.clear()
@@ -328,9 +338,14 @@ class CompressedGraph:
 
     def split_rvs(self):
         temp = set()
+        temp_cont = set()
         for rv in self.rvs:
-            temp |= rv.split_by_structure()
+            new_rvs = rv.split_by_structure()
+            temp |= new_rvs
+            if rv.value is not None and rv in self.continuous_evidence:
+                temp_cont |= new_rvs
         self.rvs = temp
+        self.continuous_evidence = temp_cont
 
     def split_factors(self):
         temp = set()

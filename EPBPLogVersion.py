@@ -210,6 +210,11 @@ class EPBP:
                 time_start = time.clock()
 
             if i < iteration - 1:
+                # update proposal
+                self.update_proposal()
+                if log_enable:
+                    print(f'\tproposal {time.clock() - time_start}')
+
                 # poll new sample
                 old_sample = self.sample
                 self.sample = self.generate_sample()
@@ -232,11 +237,6 @@ class EPBP:
                 if log_enable:
                     print(f'\tf to rv {time.clock() - time_start}')
                     time_start = time.clock()
-
-                # update proposal
-                self.update_proposal()
-                if log_enable:
-                    print(f'\tproposal {time.clock() - time_start}')
 
     def belief(self, x, rv):
         if rv.value is None:

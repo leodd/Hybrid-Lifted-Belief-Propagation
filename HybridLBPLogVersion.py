@@ -107,7 +107,27 @@ class HybridLBP:
 
     def eta_approximation(self, f, rv):
         # compute the cavity distribution
-        cavity = self.gaussian_division(self.q[rv], self.eta_message[(f, rv)])
+        a, b = self.q[rv], self.eta_message[(f, rv)]
+        if a == b:
+            weight = []
+            mu = 0
+            sig = 0
+
+            for x in rv.domain.integral_points:
+                weight.append(e ** self.message[(f, rv)][x])
+
+            z = sum(weight)
+
+            for w, x in zip(weight, rv.domain.integral_points):
+                mu += w * x
+                sig += w * x ** 2
+
+            mu = mu / z
+            sig = sig / z - mu ** 2
+
+            return mu, sig
+
+        cavity = self.gaussian_division(a, b)
 
         # compute the momentum of tilted distribution
         weight = []
@@ -432,6 +452,11 @@ class HybridLBP:
                 time_start = time.clock()
 
             if i < iteration - 1:
+                # update proposal
+                self.update_proposal()
+                if log_enable:
+                    print(f'\tproposal {time.clock() - time_start}')
+
                 self.split_factors()
                 if log_enable:
                     print(f'\tsplit factor {time.clock() - time_start}')
@@ -456,10 +481,5 @@ class HybridLBP:
                 if log_enable:
                     print(f'\tf to rv {time.clock() - time_start}')
                     time_start = time.clock()
-
-                # update proposal
-                self.update_proposal()
-                if log_enable:
-                    print(f'\tproposal {time.clock() - time_start}')
 
         self.split_factors()

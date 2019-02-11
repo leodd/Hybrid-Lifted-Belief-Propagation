@@ -99,6 +99,7 @@ class HybridLBP:
                         sig = max(sig, min_sig)
                         self.eta_message[(f, rv)] = (mu, sig)
                     else:
+                        print('!')
                         mu, sig = self.eta_message[(f, rv)]
                     eta.append((mu, sig, rv.count[f]))
                 # old_q = self.q[rv]
@@ -174,52 +175,39 @@ class HybridLBP:
     # def message_f_to_rv(self, x, f, rv, sample):
     #     # sample is a set of sample points of neighbouring rvs
     #     # incoming message should be calculated before this process
-    #     param = []
-    #     evidence_idx = []
-    #     flag = True
-    #     for idx, nb in enumerate(f.nb):
-    #         if nb == rv and flag:
-    #             param.append((x,))
-    #             flag = False
-    #         elif nb.value is None:
-    #             param.append(sample[nb])
-    #         else:
-    #             param.append((0,))
-    #             evidence_idx.append(idx)
-    #
-    #     table = []
-    #     for x_join in product(*param):
-    #         m = 0
-    #         for idx, nb in enumerate(f.nb):
-    #             if nb != rv and nb.value is None:
-    #                 m += self.message[(nb, f)][x_join[idx]]
-    #         table.append((x_join, e ** m))
-    #
-    #     if len(evidence_idx) > 0:
+    #     all_m = []
+    #     sum_of_count = 0
+    #     for f_nb, count in f.fs.items():
     #         res = 0
-    #         evidence = Counter()
+    #         param = []
+    #         flag = True
+    #         for nb in f_nb:
+    #             if nb == rv and flag:
+    #                 param.append((x,))
+    #                 flag = False
+    #             elif nb.value is None:
+    #                 param.append(sample[nb])
+    #             else:
+    #                 param.append((nb.value,))
     #
-    #         temp = [0] * len(param)
-    #         pool = random.sample(f.factors, self.n) if len(f.factors) > self.n else f.factors
-    #         for f_ in pool:
-    #             for idx in evidence_idx:
-    #                 temp[idx] = f_.nb[idx].value
-    #             evidence[tuple(temp)] += 1
+    #         if flag:
+    #             continue
     #
-    #         for v, n in evidence.items():
-    #             temp = 0
-    #             for row in table:
-    #                 temp += f.potential.get(row[0] + np.array(v)) * row[1]
-    #             temp = log(temp) if temp > 0 else -700
+    #         for x_join in product(*param):
+    #             m = 0
+    #             for idx, nb in enumerate(f_nb):
+    #                 if nb != rv and nb.value is None:
+    #                     m += self.message[(nb, f)][x_join[idx]]
+    #             res += f.potential.get(x_join) * e ** m
     #
-    #             res += temp * n
+    #         all_m.append(((log(res) if res > 0 else -700), count))
+    #         sum_of_count += count
     #
-    #         return res / len(pool)
-    #     else:
-    #         res = 0
-    #         for row in table:
-    #             res += f.potential.get(row[0]) * row[1]
-    #         return log(res) if res > 0 else -700
+    #     res = 0
+    #     for m, count in all_m:
+    #         res += m * count
+    #
+    #     return res / sum_of_count
 
     def belief_rv(self, x, rv, sample):
         # sample is a set of sample points of neighbouring rvs
@@ -249,59 +237,15 @@ class HybridLBP:
             message[k] = v / z
 
     ###########################
-    # color passing functions
+    # lifted graph functions
     ###########################
 
-    def split_evidence(self, k=2, iteration=10):
-        temp = set()
-        for rv in self.g.continuous_evidence:
-            # split evidence
-            new_rvs = rv.split_by_evidence(k, iteration)
-
-            if len(new_rvs) > 1:
-                temp |= new_rvs
-
-        self.g.continuous_evidence = temp
-        self.g.rvs |= temp
-
-    def split_rvs(self):
-        temp = set()
-        for rv in self.g.rvs:
-            # split rvs
-            new_rvs = rv.split_by_structure()
-
-            if len(new_rvs) > 1:
-                for new_rv in new_rvs:
-                    # update message
-                    if new_rv.value is None:
-                        for f in new_rv.nb:
-                            self.message[(f, new_rv)] = self.message[(f, rv)]
-                            self.eta_message[(f, new_rv)] = self.eta_message[(f, rv)]
-                        # update proposal
-                        self.q[new_rv] = self.q[rv]
-                        # update sample
-                        self.sample[new_rv] = self.sample[rv]
-
-            temp |= new_rvs
-
-        self.g.rvs = temp
-
-    def split_factors(self):
-        temp = set()
-        for f in self.g.factors:
-            # split factors
-            new_fs = f.split_by_structure()
-
-            for new_f in new_fs:
-                # update message
-                for rv in new_f.nb:
-                    if rv.value is None:
-                        self.message[(rv, new_f)] = self.message[(rv, f)]
-                        self.eta_message[(new_f, rv)] = self.eta_message[(f, rv)]
-
-            temp |= new_fs
-
-        self.g.factors = temp
+    def update_factor_nb(self, super_f):
+        fs = Counter()
+        for f in super_f.factors:
+            nb = tuple(map(self.get_cluster, f.nb))
+            fs[nb] += 1
+        super_f.fs = fs
 
     ###########################
     # query functions
@@ -379,10 +323,23 @@ class HybridLBP:
 
     def run(self, iteration=10, log_enable=False):
         # initialize cluster
-        self.g.init_cluster()
-        # self.g.split_evidence(5, 50)
-        self.g.split_factors()
-        self.g.split_rvs()
+        self.g.init_cluster(False)
+
+        for _ in range(10):
+            self.g.split_factors()
+            self.g.split_rvs()
+
+        while len(self.g.continuous_evidence) > 0:
+            self.g.split_evidence(3, 50)
+            self.g.split_factors()
+            self.g.split_rvs()
+
+        # for _ in range(20):
+        #     self.g.split_factors()
+        #     self.g.split_rvs()
+
+        for f in self.g.factors:
+            self.update_factor_nb(f)
 
         # initialize proposal
         self.initial_proposal()
@@ -405,17 +362,6 @@ class HybridLBP:
             if log_enable:
                 time_start = time.clock()
 
-            if i > 0:
-                # self.split_evidence(self.k_mean_k, self.k_mean_iteration)
-                # if log_enable:
-                #     print(f'\tevidence {time.clock() - time_start}')
-                #     time_start = time.clock()
-
-                self.split_rvs()
-                if log_enable:
-                    print(f'\tsplit rv {time.clock() - time_start}')
-                    time_start = time.clock()
-
             # calculate messages from rv to f
             for rv in self.g.rvs:
                 if rv.value is None:
@@ -432,11 +378,6 @@ class HybridLBP:
                 time_start = time.clock()
 
             if i < iteration - 1:
-                self.split_factors()
-                if log_enable:
-                    print(f'\tsplit factor {time.clock() - time_start}')
-                    time_start = time.clock()
-
                 # poll new sample
                 self.old_sample = self.sample
                 self.sample = self.generate_sample()
@@ -461,5 +402,3 @@ class HybridLBP:
                 self.update_proposal()
                 if log_enable:
                     print(f'\tproposal {time.clock() - time_start}')
-
-        self.split_factors()
