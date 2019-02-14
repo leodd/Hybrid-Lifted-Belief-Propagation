@@ -6,28 +6,53 @@ from GaBP import GaBP
 import numpy as np
 import scipy.io
 import time
+import matplotlib.pyplot as plt
 
 
 cluster_mat = scipy.io.loadmat('Data/cluster_NcutDiscrete.mat')['NcutDiscrete']
 well_t = scipy.io.loadmat('Data/well_t.mat')['well_t']
 
-well_t = well_t[:, 200:]
-t = 20
+well_t = well_t[:, 199:]
+well_t[well_t == 5000] = 0
+t = 2
 
-cluster_id = [0, 1]
+cluster_id = [1]
 
 rvs_id = []
 for i in cluster_id:
     rvs_id.append(np.where(cluster_mat[:, i] == 1)[0])
 
 rvs_id = np.concatenate(rvs_id, axis=None)
-data = well_t[rvs_id, :]
+rvs_id = rvs_id[:3]
+data = well_t[rvs_id, :t]
 
-domain = Domain((-100, 150), continuous=True, integral_points=linspace(-100, 150, 50))
+# for i in range(len(rvs_id)):
+#     plt.plot(list(range(20)), data[i, :])
+# plt.show()
 
-kmf = KalmanFilter(domain, np.eye(len(rvs_id)), np.eye(len(rvs_id)), np.eye(len(rvs_id)), np.eye(len(rvs_id)))
-g, rvs_table = kmf.grounded_graph(t, data)
+domain = Domain((-10, 10), continuous=True, integral_points=linspace(-10, 10, 30))
 
+kmf = KalmanFilter(domain,
+                   np.array([
+                       [1, 0, 0.001],
+                       [0, 1, 0],
+                       [0.00, 0, 1]
+                   ]),
+                   np.ones([len(rvs_id), len(rvs_id)]),
+                   np.eye(len(rvs_id)),
+                   np.ones([len(rvs_id), len(rvs_id)]))
+
+# kmf = KalmanFilter(domain,
+#                    np.eye(len(rvs_id)),
+#                    np.ones([len(rvs_id), len(rvs_id)]),
+#                    np.eye(len(rvs_id)),
+#                    np.ones([len(rvs_id), len(rvs_id)]))
+
+result = []
+# for i in range(t):
+i = t - 1
+g, rvs_table = kmf.grounded_graph(i + 1, data)
+bp = HybridLBP(g, n=20)
 print('number of vr', len(g.rvs))
 num_evidence = 0
 for rv in g.rvs:
@@ -36,15 +61,12 @@ for rv in g.rvs:
 print('number of evidence', num_evidence)
 
 start_time = time.time()
-bp = HybridLBP(g, n=100)
 bp.run(20, log_enable=False)
 print('time lapse', time.time() - start_time)
 
-result = []
 for i in range(t):
     temp = []
     for idx, rv in enumerate(rvs_table[i]):
-        # print(key, bp.map(rv))
         temp.append([idx, bp.map(rv)])
     result.append(temp)
 

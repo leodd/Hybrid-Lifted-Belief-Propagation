@@ -34,7 +34,7 @@ class LinearGaussianPotential(Potential):
     def __init__(self, coeff, sig):
         Potential.__init__(self, symmetric=False)
         self.coeff = coeff
-        self.sig = sig * 2
+        self.sig = 2 * sig ** 2
 
     def get(self, parameters):
         return np.exp(-(parameters[1] - self.coeff * parameters[0]) ** 2 / self.sig)

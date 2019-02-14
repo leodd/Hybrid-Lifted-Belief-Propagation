@@ -108,7 +108,7 @@ class HybridLBP:
     def eta_approximation(self, f, rv):
         # compute the cavity distribution
         a, b = self.q[rv], self.eta_message[(f, rv)]
-        if a == b:
+        if a[1] >= b[1]:
             weight = []
             mu = 0
             sig = 0
@@ -190,56 +190,6 @@ class HybridLBP:
             res += f.potential.get(x_join) * e ** m
 
         return log(res) if res > 0 else -700
-
-    # def message_f_to_rv(self, x, f, rv, sample):
-    #     # sample is a set of sample points of neighbouring rvs
-    #     # incoming message should be calculated before this process
-    #     param = []
-    #     evidence_idx = []
-    #     flag = True
-    #     for idx, nb in enumerate(f.nb):
-    #         if nb == rv and flag:
-    #             param.append((x,))
-    #             flag = False
-    #         elif nb.value is None:
-    #             param.append(sample[nb])
-    #         else:
-    #             param.append((0,))
-    #             evidence_idx.append(idx)
-    #
-    #     table = []
-    #     for x_join in product(*param):
-    #         m = 0
-    #         for idx, nb in enumerate(f.nb):
-    #             if nb != rv and nb.value is None:
-    #                 m += self.message[(nb, f)][x_join[idx]]
-    #         table.append((x_join, e ** m))
-    #
-    #     if len(evidence_idx) > 0:
-    #         res = 0
-    #         evidence = Counter()
-    #
-    #         temp = [0] * len(param)
-    #         pool = random.sample(f.factors, self.n) if len(f.factors) > self.n else f.factors
-    #         for f_ in pool:
-    #             for idx in evidence_idx:
-    #                 temp[idx] = f_.nb[idx].value
-    #             evidence[tuple(temp)] += 1
-    #
-    #         for v, n in evidence.items():
-    #             temp = 0
-    #             for row in table:
-    #                 temp += f.potential.get(row[0] + np.array(v)) * row[1]
-    #             temp = log(temp) if temp > 0 else -700
-    #
-    #             res += temp * n
-    #
-    #         return res / len(pool)
-    #     else:
-    #         res = 0
-    #         for row in table:
-    #             res += f.potential.get(row[0]) * row[1]
-    #         return log(res) if res > 0 else -700
 
     def belief_rv(self, x, rv, sample):
         # sample is a set of sample points of neighbouring rvs

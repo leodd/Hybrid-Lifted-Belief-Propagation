@@ -23,23 +23,28 @@ class KalmanFilter:
         # create all rv instance
         for t in range(num_t_steps):
             for rv_id in range(self.transition_coeff.shape[0]):
-                grounding = RV(self.domain, None)
-                grounded_rvs.append(grounding)
-                grounded_rvs_table[t].append(grounding)
+                if t == 0:
+                    grounding = RV(self.domain, data[rv_id, 0])
+                    grounded_rvs.append(grounding)
+                    grounded_rvs_table[t].append(grounding)
+                else:
+                    grounding = RV(self.domain, None)
+                    grounded_rvs.append(grounding)
+                    grounded_rvs_table[t].append(grounding)
 
-                if data[rv_id, t] != 5000:
-                    # add observe node
-                    observe = RV(self.domain, data[rv_id, t])
-                    grounded_rvs.append(observe)
+                    if data[rv_id, t] != 5000:
+                        # add observe node
+                        observe = RV(self.domain, data[rv_id, t])
+                        grounded_rvs.append(observe)
 
-                    # add observe factors
-                    obs_potential = LinearGaussianPotential(
-                        self.observation_coeff[rv_id, rv_id],
-                        self.observation_variance[rv_id, rv_id]
-                    )
-                    grounded_factors.append(
-                        F(obs_potential, [grounding, observe])
-                    )
+                        # add observe factors
+                        obs_potential = LinearGaussianPotential(
+                            self.observation_coeff[rv_id, rv_id],
+                            self.observation_variance[rv_id, rv_id]
+                        )
+                        grounded_factors.append(
+                            F(obs_potential, [grounding, observe])
+                        )
 
         # add transition factors
         for t in range(num_t_steps - 1):
