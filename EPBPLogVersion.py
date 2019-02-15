@@ -16,9 +16,10 @@ class EPBP:
     var_threshold = 5
     max_log_value = 700
 
-    def __init__(self, g=None, n=50):
+    def __init__(self, g=None, n=50, proposal_approximation='EP'):
         self.g = g
         self.n = n
+        self.proposal_approximation = proposal_approximation
         self.message = dict()  # log message, message in log space
         self.sample = dict()
         self.q = dict()
@@ -75,7 +76,10 @@ class EPBP:
                 eta = list()
                 min_sig = len(rv.nb) * self.var_threshold
                 for f in rv.nb:
-                    mu, sig = self.eta_approximation(f, rv)
+                    if self.proposal_approximation == 'EP':
+                        mu, sig = self.eta_approximation(f, rv)
+                    else:
+                        mu, sig = self.eta_approximation_simple(f, rv)
                     if 0 < sig < Inf:
                         sig = max(sig, min_sig)
                         self.eta_message[(f, rv)] = (mu, sig)
@@ -86,9 +90,34 @@ class EPBP:
                 self.q[rv] = self.gaussian_product(*eta)
                 # print(f'{old_q} -> {self.q[rv]}')
 
+    def eta_approximation_simple(self, f, rv):
+        # approximate the message directly
+        weight = []
+        mu = 0
+        sig = 0
+
+        for x in rv.domain.integral_points:
+            weight.append(e ** self.message[(f, rv)][x])
+
+        z = sum(weight)
+
+        for w, x in zip(weight, rv.domain.integral_points):
+            mu += w * x
+            sig += w * x ** 2
+
+        mu = mu / z
+        sig = sig / z - mu ** 2
+
+        return mu, sig
+
     def eta_approximation(self, f, rv):
         # compute the cavity distribution
-        cavity = self.gaussian_division(self.q[rv], self.eta_message[(f, rv)])
+        a, b = self.q[rv], self.eta_message[(f, rv)]
+
+        if a[1] >= b[1]:
+            return self.eta_approximation_simple(f, rv)
+
+        cavity = self.gaussian_division(a, b)
 
         # compute the momentum of tilted distribution
         weight = []
@@ -107,6 +136,9 @@ class EPBP:
 
         mu = mu / z
         sig = sig / z - mu ** 2
+
+        if sig >= cavity[1]:
+            return self.eta_approximation_simple(f, rv)
 
         # approximate eta
         return self.gaussian_division((mu, sig), cavity)

@@ -9,7 +9,7 @@ from show_image import show_images
 row = 50
 col = 50
 
-data = pd.read_fwf('./noisyImage.dat', header=None)
+data = pd.read_fwf('../Data/noisyImage.dat', header=None)
 m = data.iloc[0:row, 0:col].values
 m = m * 100
 
@@ -63,7 +63,7 @@ g.rvs = rvs + evidence
 g.factors = fs
 g.init_nb()
 
-bp = HybridLBP(g, n=10, step_size=1)
+bp = EPBP(g, n=10, proposal_approximation='simple')
 
 # def initial_proposal():
 #     for i in range(row):
@@ -72,7 +72,7 @@ bp = HybridLBP(g, n=10, step_size=1)
 #
 # bp.custom_initial_proposal = initial_proposal
 
-bp.run(6, log_enable=True)
+bp.run(7, log_enable=True)
 
 print(len(bp.g.rvs))
 

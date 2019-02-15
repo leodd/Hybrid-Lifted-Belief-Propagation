@@ -15,14 +15,15 @@ import time
 class HybridLBP:
     # Hybrid lifted particle belief propagation
 
-    var_threshold = 5
+    var_threshold = 1
     max_log_value = 700
 
     def __init__(self,
                  g,
                  n=50,
                  k_mean_k=2,
-                 k_mean_iteration=10):
+                 k_mean_iteration=10,
+                 proposal_approximation='EP'):
         self.g = CompressedGraph(g)
         self.n = n
         self.message = dict()  # log message, message in log space
@@ -33,6 +34,7 @@ class HybridLBP:
         self.query_cache = dict()
         self.k_mean_k = k_mean_k
         self.k_mean_iteration = k_mean_iteration
+        self.proposal_approximation = proposal_approximation
 
     ###########################
     # utils
@@ -94,7 +96,10 @@ class HybridLBP:
                 eta = list()
                 min_sig = sum(rv.count.values()) * self.var_threshold
                 for f in rv.nb:
-                    mu, sig = self.eta_approximation(f, rv)
+                    if self.proposal_approximation == 'EP':
+                        mu, sig = self.eta_approximation(f, rv)
+                    else:
+                        mu, sig = self.eta_approximation_simple(f, rv)
                     if 0 < sig < Inf:
                         sig = max(sig, min_sig)
                         self.eta_message[(f, rv)] = (mu, sig)
@@ -105,27 +110,32 @@ class HybridLBP:
                 self.q[rv] = self.gaussian_product(*eta)
                 # print(f'{old_q} -> {self.q[rv]}')
 
+    def eta_approximation_simple(self, f, rv):
+        # approximate the message directly
+        weight = []
+        mu = 0
+        sig = 0
+
+        for x in rv.domain.integral_points:
+            weight.append(e ** self.message[(f, rv)][x])
+
+        z = sum(weight)
+
+        for w, x in zip(weight, rv.domain.integral_points):
+            mu += w * x
+            sig += w * x ** 2
+
+        mu = mu / z
+        sig = sig / z - mu ** 2
+
+        return mu, sig
+
     def eta_approximation(self, f, rv):
         # compute the cavity distribution
         a, b = self.q[rv], self.eta_message[(f, rv)]
+
         if a[1] >= b[1]:
-            weight = []
-            mu = 0
-            sig = 0
-
-            for x in rv.domain.integral_points:
-                weight.append(e ** self.message[(f, rv)][x])
-
-            z = sum(weight)
-
-            for w, x in zip(weight, rv.domain.integral_points):
-                mu += w * x
-                sig += w * x ** 2
-
-            mu = mu / z
-            sig = sig / z - mu ** 2
-
-            return mu, sig
+            return self.eta_approximation_simple(f, rv)
 
         cavity = self.gaussian_division(a, b)
 
@@ -146,6 +156,9 @@ class HybridLBP:
 
         mu = mu / z
         sig = sig / z - mu ** 2
+
+        if sig >= cavity[1]:
+            return self.eta_approximation_simple(f, rv)
 
         # approximate eta
         return self.gaussian_division((mu, sig), cavity)
@@ -349,8 +362,8 @@ class HybridLBP:
 
     def run(self, iteration=10, log_enable=False):
         # initialize cluster
-        self.g.init_cluster()
-        # self.g.split_evidence(5, 50)
+        self.g.init_cluster(False)
+        self.g.split_evidence(2, 50)
         self.g.split_factors()
         self.g.split_rvs()
 
@@ -376,10 +389,10 @@ class HybridLBP:
                 time_start = time.clock()
 
             if i > 0:
-                # self.split_evidence(self.k_mean_k, self.k_mean_iteration)
-                # if log_enable:
-                #     print(f'\tevidence {time.clock() - time_start}')
-                #     time_start = time.clock()
+                self.split_evidence(self.k_mean_k, self.k_mean_iteration)
+                if log_enable:
+                    print(f'\tevidence {time.clock() - time_start}')
+                    time_start = time.clock()
 
                 self.split_rvs()
                 if log_enable:
