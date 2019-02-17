@@ -3,6 +3,7 @@ from Potential import GaussianPotential
 from HybridLBPC2F import HybridLBP
 from EPBPLogVersion import EPBP
 from GaBP import GaBP
+from GaLBP import GaLBP
 import numpy as np
 import time
 
@@ -69,9 +70,10 @@ result_table = np.zeros((len(rvs_table), num_test))
 time_table = []
 
 for i in range(num_test):
-    bp = HybridLBP(g, n=20)
+    # bp = HybridLBP(g, n=20)
+    bp = GaLBP(g)
     start_time = time.process_time()
-    bp.run(15, log_enable=False)
+    bp.run(20, log_enable=False)
     time_table.append(time.process_time() - start_time)
 
     j = 0
