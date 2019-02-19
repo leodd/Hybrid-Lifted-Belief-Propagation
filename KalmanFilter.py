@@ -171,7 +171,7 @@ class KalmanFilter:
     #                     # add observe factors
     #                     obs_potential = LinearGaussianPotential(
     #                         self.observation_coeff[rv_id, rv_id],
-    #                         self.observation_variance[rv_id, rv_id]
+    #                         self.observation_variance
     #                     )
     #                     grounded_factors.append(
     #                         F(obs_potential, [grounding, observe])
@@ -184,7 +184,7 @@ class KalmanFilter:
     #                 if self.transition_coeff[rv_id, rv_id_next] != 0:
     #                     transition_potential = LinearGaussianPotential(
     #                         self.transition_coeff[rv_id, rv_id_next],
-    #                         self.transition_variance[rv_id, rv_id_next]
+    #                         self.transition_variance
     #                     )
     #                     grounded_factors.append(
     #                         F(
@@ -198,4 +198,4 @@ class KalmanFilter:
     #     grounded_graph.init_nb()
     #
     #     return grounded_graph, grounded_rvs_table
-
+    #

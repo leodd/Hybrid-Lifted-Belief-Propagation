@@ -1,6 +1,6 @@
 from RelationalGraph import *
 from Potential import GaussianPotential
-from HybridLBPC2F import HybridLBP
+from HybridLBPLogVersion import HybridLBP
 from EPBPLogVersion import EPBP
 from GaBP import GaBP
 from GaLBP import GaLBP
@@ -34,8 +34,8 @@ p2 = GaussianPotential([0., 0.], [[10., 5.], [5., 10.]])
 p3 = GaussianPotential([0., 0.], [[10., 7.], [7., 10.]])
 
 lv_recession = LV(('all',))
-lv_category = LV(instance_category[:100])
-lv_bank = LV(instance_bank[:10])
+lv_category = LV(instance_category[:50])
+lv_bank = LV(instance_bank[:5])
 
 atom_recession = Atom(domain_percentage, logical_variables=(lv_recession,), name='recession')
 atom_market = Atom(domain_percentage, logical_variables=(lv_category,), name='market')
@@ -70,8 +70,8 @@ result_table = np.zeros((len(rvs_table), num_test))
 time_table = []
 
 for i in range(num_test):
-    # bp = HybridLBP(g, n=20)
-    bp = GaLBP(g)
+    bp = HybridLBP(g, n=20)
+    # bp = GaLBP(g)
     start_time = time.process_time()
     bp.run(20, log_enable=False)
     time_table.append(time.process_time() - start_time)

@@ -60,9 +60,7 @@ class RelationalGraph:
             yield dict(zip(lvs, combination))
 
     def grounded_graph(self):
-        grounded_rvs = []
-        grounded_factors = []
-
+        grounded_factors = set()
         grounded_rvs_table = dict()
 
         # ground all relational atoms
@@ -72,7 +70,6 @@ class RelationalGraph:
                 value = self.data[key] if key in self.data else None
                 grounding = RV(atom.domain, value)
                 grounded_rvs_table[key] = grounding
-                grounded_rvs.append(grounding)
 
         # add factors
         for param_f in self.param_factors:
@@ -89,12 +86,20 @@ class RelationalGraph:
                     nb = []
                     for atom in param_f.nb:
                         nb.append(grounded_rvs_table[atom.key(substitution)])
-                    grounded_factors.append(F(param_f.potential, nb))
+                    grounded_factors.add(F(param_f.potential, nb))
 
         grounded_graph = Graph()
-        grounded_graph.rvs = grounded_rvs
+        grounded_graph.rvs = set(grounded_rvs_table.values())
         grounded_graph.factors = grounded_factors
         grounded_graph.init_nb()
+
+        # remove unconnected rvs
+        keys = tuple(grounded_rvs_table.keys())
+        for key in keys:
+            if len(grounded_rvs_table[key].nb) == 0:
+                del grounded_rvs_table[key]
+
+        grounded_graph.rvs = set(grounded_rvs_table.values())
 
         return grounded_graph, grounded_rvs_table
 

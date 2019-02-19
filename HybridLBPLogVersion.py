@@ -2,7 +2,7 @@ from CompressedGraph import *
 from numpy import Inf, exp
 from scipy.integrate import quad
 from scipy.stats import norm
-from scipy.optimize import fmin
+from scipy.optimize import fminbound
 from statistics import mean
 from math import sqrt, log, e
 from collections import Counter
@@ -15,8 +15,8 @@ import time
 class HybridLBP:
     # Hybrid lifted particle belief propagation
 
-    var_threshold = 5
-    max_log_value = 700
+    var_threshold = 1
+    max_log_value = 350
 
     def __init__(self,
                  g,
@@ -74,7 +74,8 @@ class HybridLBP:
         for rv in self.g.rvs:
             if rv.value is None:
                 if rv.domain.continuous:
-                    sample[rv] = norm(self.q[rv][0], sqrt(self.q[rv][1])).rvs(self.n)
+                    sample[rv] = np.clip(norm(self.q[rv][0], sqrt(self.q[rv][1])).rvs(self.n),
+                                         a_min=rv.domain.values[0], a_max=rv.domain.values[1])
                 else:
                     sample[rv] = rv.domain.values
         return sample
@@ -157,8 +158,8 @@ class HybridLBP:
         mu = mu / z
         sig = sig / z - mu ** 2
 
-        if sig >= cavity[1]:
-            return self.eta_approximation_simple(f, rv)
+        # if sig >= cavity[1]:
+        #     return self.eta_approximation_simple(f, rv)
 
         # approximate eta
         return self.gaussian_division((mu, sig), cavity)
@@ -259,9 +260,11 @@ class HybridLBP:
                     if new_rv.value is None:
                         for f in new_rv.nb:
                             self.message[(f, new_rv)] = self.message[(f, rv)]
-                            self.eta_message[(f, new_rv)] = self.eta_message[(f, rv)]
-                        # update proposal
-                        self.q[new_rv] = self.q[rv]
+                            if rv.domain.continuous:
+                                self.eta_message[(f, new_rv)] = self.eta_message[(f, rv)]
+                        if rv.domain.continuous:
+                            # update proposal
+                            self.q[new_rv] = self.q[rv]
                         # update sample
                         self.sample[new_rv] = self.sample[rv]
 
@@ -280,7 +283,8 @@ class HybridLBP:
                 for rv in new_f.nb:
                     if rv.value is None:
                         self.message[(rv, new_f)] = self.message[(rv, f)]
-                        self.eta_message[(new_f, rv)] = self.eta_message[(f, rv)]
+                        if rv.domain.continuous:
+                            self.eta_message[(new_f, rv)] = self.eta_message[(f, rv)]
 
             temp |= new_fs
 
@@ -300,15 +304,36 @@ class HybridLBP:
             res += self.message_f_to_rv(x, f.cluster, rv.cluster, sample)
         return res
 
+    # @staticmethod
+    # def area(f, a, b, n):
+    #     res = 0
+    #     x = linspace(a, b, n)
+    #     print(x)
+    #     d = x[1] - x[0]
+    #     prev = f(x[0])
+    #     for i in range(1, n):
+    #         current = f(x[i])
+    #         res += (prev + current) * d
+    #         prev = current
+    #     return res * 0.5
+
     def belief(self, x, rv):
         if rv.value is None:
-            signature = tuple(sorted(map(self.get_cluster, rv.nb)))
+            signature = (tuple(sorted(map(self.get_cluster, rv.nb))), 1)
 
             if rv.domain.continuous:
                 if signature in self.query_cache:
                     z = self.query_cache[signature]
                 else:
-                    z = quad(lambda val: e ** self.belief_rv_query(val, rv, self.sample), -Inf, Inf)[0]
+                    z = quad(
+                        lambda val: e ** self.belief_rv_query(val, rv, self.sample),
+                        rv.domain.values[0], rv.domain.values[1]
+                    )[0]
+                    # z = self.area(
+                    #     lambda val: e ** self.belief_rv_query(val, rv, self.sample),
+                    #     rv.domain.values[0], rv.domain.values[1],
+                    #     20
+                    # )
                     self.query_cache[signature] = z
 
                 b = e ** self.belief_rv_query(x, rv, self.sample)
@@ -336,7 +361,11 @@ class HybridLBP:
                 if signature in self.query_cache:
                     res = self.query_cache[signature]
                 else:
-                    res = fmin(lambda val: -self.belief_rv_query(val, rv, self.sample), 0, disp=False)[0]
+                    res = fminbound(
+                        lambda val: -self.belief_rv_query(val, rv, self.sample),
+                        rv.domain.values[0], rv.domain.values[1],
+                        disp=False
+                    )
                     self.query_cache[signature] = res
 
                 # print(f'{self.q[rv.cluster]}')
@@ -378,8 +407,11 @@ class HybridLBP:
             if rv.value is None:
                 for f in rv.nb:
                     m = {k: 0 for k in self.sample[rv]}
-                    eta_m = {k: 0 for k in rv.domain.integral_points}
-                    self.message[(f, rv)] = {**m, **eta_m}
+                    if rv.domain.continuous:
+                        eta_m = {k: 0 for k in rv.domain.integral_points}
+                        self.message[(f, rv)] = {**m, **eta_m}
+                    else:
+                        self.message[(f, rv)] = m
                     self.message[(rv, f)] = m
 
         # LBP iteration
@@ -437,8 +469,9 @@ class HybridLBP:
                             m = dict()
                             for point in self.sample[rv]:
                                 m[point] = self.message_f_to_rv(point, f, rv, self.old_sample)
-                            for point in rv.domain.integral_points:
-                                m[point] = self.message_f_to_rv(point, f, rv, self.old_sample)
+                            if rv.domain.continuous:
+                                for point in rv.domain.integral_points:
+                                    m[point] = self.message_f_to_rv(point, f, rv, self.old_sample)
                             self.message[(f, rv)] = m
 
                 if log_enable:

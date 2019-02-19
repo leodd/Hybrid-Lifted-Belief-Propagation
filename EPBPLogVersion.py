@@ -2,7 +2,7 @@ from Graph import *
 from numpy import Inf, exp
 from scipy.integrate import quad
 from scipy.stats import norm
-from scipy.optimize import fmin
+from scipy.optimize import fminbound
 from statistics import mean
 from math import sqrt, log, e
 from itertools import product
@@ -218,8 +218,11 @@ class EPBP:
         for rv in self.g.rvs:
             for f in rv.nb:
                 m = {k: 0 for k in self.sample[rv]}
-                eta_m = {k: 0 for k in rv.domain.integral_points}
-                self.message[(f, rv)] = {**m, **eta_m}
+                if rv.domain.continuous:
+                    eta_m = {k: 0 for k in rv.domain.integral_points}
+                    self.message[(f, rv)] = {**m, **eta_m}
+                else:
+                    self.message[(f, rv)] = m
                 self.message[(rv, f)] = m
 
         # BP iteration
@@ -259,12 +262,10 @@ class EPBP:
                             m = dict()
                             for point in self.sample[rv]:
                                 m[point] = self.message_f_to_rv(point, f, rv, old_sample)
-                            # compute the eta message for each integral point
-                            eta_m = dict()
-                            for point in rv.domain.integral_points:
-                                eta_m[point] = self.message_f_to_rv(point, f, rv, old_sample)
-                            self.log_message_balance(eta_m)
-                            self.message[(f, rv)] = {**m, **eta_m}
+                            if rv.domain.continuous:
+                                for point in rv.domain.integral_points:
+                                    m[point] = self.message_f_to_rv(point, f, rv, old_sample)
+                            self.message[(f, rv)] = m
 
                 if log_enable:
                     print(f'\tf to rv {time.clock() - time_start}')
@@ -273,15 +274,21 @@ class EPBP:
     def belief(self, x, rv):
         if rv.value is None:
             b = e ** self.belief_rv(x, rv, self.sample)
-            z = quad(lambda val: e ** self.belief_rv(val, rv, self.sample), -Inf, Inf)[0]
+            z = quad(
+                lambda val: e ** self.belief_rv(val, rv, self.sample),
+                rv.domain.values[0], rv.domain.values[1]
+            )[0]
             return b / z
         else:
             return 1 if x == rv.value else 0
 
     def map(self, rv):
         if rv.value is None:
-            res = fmin(lambda val: -self.belief_rv(val, rv, self.sample), 0, disp=False)[0]
-            # print(f'{self.q[rv]}')
+            res = fminbound(
+                lambda val: -self.belief_rv(val, rv, self.sample),
+                rv.domain.values[0], rv.domain.values[1],
+                disp=False
+            )
             return res
         else:
             return rv.value

@@ -12,9 +12,16 @@ import matplotlib.pyplot as plt
 cluster_mat = scipy.io.loadmat('Data/cluster_NcutDiscrete.mat')['NcutDiscrete']
 well_t = scipy.io.loadmat('Data/well_t.mat')['well_t']
 
+# idx = np.where(cluster_mat[:, 1] == 1)[0]
+# cluster_mat[idx[3:], 1] = 0
+# idx = np.where(cluster_mat[:, 2] == 1)[0]
+# cluster_mat[idx[:48], 2] = 0
+# cluster_mat[idx[52:], 2] = 0
+
 well_t = well_t[:, 199:]
-well_t[well_t == 5000] = 0
-t = 6
+well_t[well_t[:, 0] == 5000, 0] = 0
+well_t[well_t == 5000] = 1
+t = 20
 
 cluster_id = [1]
 
@@ -23,19 +30,13 @@ for i in cluster_id:
     rvs_id.append(np.where(cluster_mat[:, i] == 1)[0])
 
 rvs_id = np.concatenate(rvs_id, axis=None)
-# rvs_id = rvs_id[:6]
 data = well_t[rvs_id, :t]
-
-# for i in range(len(rvs_id)):
-#     plt.plot(list(range(20)), data[i, :])
-# plt.show()
 
 domain = Domain((-10, 10), continuous=True, integral_points=linspace(-10, 10, 30))
 
 kmf = KalmanFilter(domain,
-                   # np.ones([len(rvs_id), len(rvs_id)]),
-                   np.eye(len(rvs_id)) + 0.1,
-                   100,
+                   np.eye(len(rvs_id)),
+                   1,
                    np.eye(len(rvs_id)),
                    1)
 
@@ -52,7 +53,7 @@ for i in range(t):
     print('number of evidence', num_evidence)
 
     start_time = time.time()
-    bp.run(6, log_enable=False)
+    bp.run(10, log_enable=False)
     print('time lapse', time.time() - start_time)
 
     # for i in range(t):
@@ -61,4 +62,4 @@ for i in range(t):
         temp.append([idx, bp.map(rv)])
     result.append(temp)
 
-np.save('Data/well_t_prediction', np.array(result))
+np.save('Data/well_t_prediction_1', np.array(result))
