@@ -23,8 +23,11 @@ class GaBP:
             for nb in rv.nb:
                 if nb != f:
                     nb_mu, nb_sig = self.message[(nb, rv)]
-                    mu += nb_sig ** -1 * nb_mu
-                    sig += nb_sig ** -1
+                    if nb_sig is None:
+                        mu -= nb_mu
+                    else:
+                        mu += nb_sig ** -1 * nb_mu
+                        sig += nb_sig ** -1
             sig = sig ** -1
             mu = sig * mu
             return mu, sig
@@ -112,10 +115,14 @@ class GaBP:
                 if nb != rv:
                     rv_ = nb
 
-            m = self.message[(rv_, f)]
-            u, s2 = m
-            mu = 2 * s1 * u / (h * s2)
-            sig = 4 * s1 ** 2 / (h ** 2 * s2)
+            if rv_.value is None:
+                m = self.message[(rv_, f)]
+                u, s2 = m
+                mu = 2 * s1 * u / (h * s2)
+                sig = -4 * s1 ** 2 / (h ** 2 * s2)
+            else:
+                mu = h * rv_.value / (2 * s1)
+                sig = None
 
             return mu, sig
 
@@ -166,8 +173,11 @@ class GaBP:
             mu, sig = 0, 0
             for nb in rv.nb:
                 nb_mu, nb_sig = self.message[(nb, rv)]
-                mu += nb_sig ** -1 * nb_mu
-                sig += nb_sig ** -1
+                if nb_sig is None:
+                    mu -= nb_mu
+                else:
+                    mu += nb_sig ** -1 * nb_mu
+                    sig += nb_sig ** -1
             sig = sig ** -1
             mu = sig * mu
             return self.norm_pdf(x, mu, sig)
@@ -179,8 +189,11 @@ class GaBP:
             mu, sig = 0, 0
             for nb in rv.nb:
                 nb_mu, nb_sig = self.message[(nb, rv)]
-                mu += nb_sig ** -1 * nb_mu
-                sig += nb_sig ** -1
+                if nb_sig is None:
+                    mu -= nb_mu
+                else:
+                    mu += nb_sig ** -1 * nb_mu
+                    sig += nb_sig ** -1
             sig = sig ** -1
             mu = sig * mu
             return mu

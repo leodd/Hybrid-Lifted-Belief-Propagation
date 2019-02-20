@@ -27,8 +27,11 @@ class GaLBP:
                 else:
                     count = rv.count[f] - 1
                 nb_mu, nb_sig = self.message[(nb, rv)]
-                mu += nb_sig ** -1 * nb_mu * count
-                sig += nb_sig ** -1 * count
+                if nb_sig is None:
+                    mu -= nb_mu * count
+                else:
+                    mu += nb_sig ** -1 * nb_mu * count
+                    sig += nb_sig ** -1 * count
             sig = sig ** -1
             mu = sig * mu
             return mu, sig
@@ -92,14 +95,14 @@ class GaLBP:
                     mu = u / h
                     sig = (s1 + s2) / h ** 2
                 else:
-                    mu = u
-                    sig = s2
+                    mu = u * h
+                    sig = s1 + s2 * h ** 2
             else:
                 if rv_idx == 0:
-                    mu = 0
+                    mu = rv_.value / h
                     sig = s1 / h ** 2
                 else:
-                    mu = 0
+                    mu = h * rv_.value
                     sig = s1
 
             return mu, sig
@@ -116,10 +119,14 @@ class GaLBP:
                 if nb != rv:
                     rv_ = nb
 
-            m = self.message[(rv_, f)]
-            u, s2 = m
-            mu = 2 * s1 * u / (h * s2)
-            sig = 4 * s1 ** 2 / (h ** 2 * s2)
+            if rv_.value is None:
+                m = self.message[(rv_, f)]
+                u, s2 = m
+                mu = 2 * s1 * u / (h * s2)
+                sig = -4 * s1 ** 2 / (h ** 2 * s2)
+            else:
+                mu = h * rv_.value / (2 * s1)
+                sig = None
 
             return mu, sig
 
@@ -173,13 +180,18 @@ class GaLBP:
                 if log_enable:
                     print(f'\tf to rv {time.clock() - time_start}')
 
-    def belief(self, x, rv):
+    def belief(self, x, ground_rv):
+        rv = ground_rv.cluster
         if rv.value is None:
             mu, sig = 0, 0
             for nb in rv.nb:
+                count = rv.count[nb]
                 nb_mu, nb_sig = self.message[(nb, rv)]
-                mu += nb_sig ** -1 * nb_mu
-                sig += nb_sig ** -1
+                if nb_sig is None:
+                    mu -= nb_mu * count
+                else:
+                    mu += nb_sig ** -1 * nb_mu * count
+                    sig += nb_sig ** -1 * count
             sig = sig ** -1
             mu = sig * mu
             return self.norm_pdf(x, mu, sig)
@@ -193,8 +205,11 @@ class GaLBP:
             for nb in rv.nb:
                 count = rv.count[nb]
                 nb_mu, nb_sig = self.message[(nb, rv)]
-                mu += nb_sig ** -1 * nb_mu * count
-                sig += nb_sig ** -1 * count
+                if nb_sig is None:
+                    mu -= nb_mu * count
+                else:
+                    mu += nb_sig ** -1 * nb_mu * count
+                    sig += nb_sig ** -1 * count
             sig = sig ** -1
             mu = sig * mu
             return mu

@@ -2,6 +2,7 @@ from KalmanFilter import KalmanFilter
 from Graph import *
 from HybridLBPLogVersion import HybridLBP
 from EPBPLogVersion import EPBP
+from GaLBP import GaLBP
 from GaBP import GaBP
 import numpy as np
 import scipy.io
@@ -36,16 +37,16 @@ domain = Domain((-10, 10), continuous=True, integral_points=linspace(-10, 10, 30
 
 kmf = KalmanFilter(domain,
                    np.eye(len(rvs_id)),
-                   5,
+                   1,
                    np.eye(len(rvs_id)),
-                   1)
+                   5)
 
 result = []
 for i in range(t):
     # i = t - 1
     g, rvs_table = kmf.grounded_graph(i + 1, data)
-    # bp = HybridLBP(g, n=20, proposal_approximation='simple')
-    bp = GaBP(g)
+    bp = HybridLBP(g, n=20, proposal_approximation='simple')
+    # bp = GaLBP(g)
     print('number of vr', len(g.rvs))
     num_evidence = 0
     for rv in g.rvs:
