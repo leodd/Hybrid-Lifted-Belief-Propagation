@@ -70,8 +70,8 @@ result_table = np.zeros((len(rvs_table), num_test))
 time_table = []
 
 for i in range(num_test):
-    bp = HybridLBP(g, n=20)
-    # bp = GaLBP(g)
+    # bp = HybridLBP(g, n=20)
+    bp = GaLBP(g)
     start_time = time.process_time()
     bp.run(20, log_enable=False)
     time_table.append(time.process_time() - start_time)

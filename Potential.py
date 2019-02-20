@@ -34,10 +34,50 @@ class LinearGaussianPotential(Potential):
     def __init__(self, coeff, sig):
         Potential.__init__(self, symmetric=False)
         self.coeff = coeff
-        self.sig = 2 * sig ** 2
+        self.sig = sig
 
     def get(self, parameters):
-        return np.exp(-(parameters[1] - self.coeff * parameters[0]) ** 2 / self.sig)
+        return np.exp(-(parameters[1] - self.coeff * parameters[0]) ** 2 * 0.5 / self.sig)
+
+    def __hash__(self):
+        return hash((self.coeff, self.sig))
+
+    def __eq__(self, other):
+        return (
+            self.__class__ == other.__class__ and
+            self.coeff == other.coeff and
+            self.sig == other.sig
+        )
+
+
+class X2Potential(Potential):
+    def __init__(self, coeff, sig):
+        Potential.__init__(self, symmetric=False)
+        self.coeff = coeff
+        self.sig = sig
+
+    def get(self, parameters):
+        return np.exp(-self.coeff * parameters[0] ** 2 * 0.5 / self.sig)
+
+    def __hash__(self):
+        return hash((self.coeff, self.sig))
+
+    def __eq__(self, other):
+        return (
+            self.__class__ == other.__class__ and
+            self.coeff == other.coeff and
+            self.sig == other.sig
+        )
+
+
+class XYPotential(Potential):
+    def __init__(self, coeff, sig):
+        Potential.__init__(self, symmetric=True)
+        self.coeff = coeff
+        self.sig = sig
+
+    def get(self, parameters):
+        return np.exp(-self.coeff * parameters[0] * parameters[1] * 0.5 / self.sig)
 
     def __hash__(self):
         return hash((self.coeff, self.sig))

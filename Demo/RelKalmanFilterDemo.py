@@ -36,7 +36,7 @@ domain = Domain((-10, 10), continuous=True, integral_points=linspace(-10, 10, 30
 
 kmf = KalmanFilter(domain,
                    np.eye(len(rvs_id)),
-                   1,
+                   5,
                    np.eye(len(rvs_id)),
                    1)
 
@@ -44,7 +44,8 @@ result = []
 for i in range(t):
     # i = t - 1
     g, rvs_table = kmf.grounded_graph(i + 1, data)
-    bp = HybridLBP(g, n=20, proposal_approximation='simple')
+    # bp = HybridLBP(g, n=20, proposal_approximation='simple')
+    bp = GaBP(g)
     print('number of vr', len(g.rvs))
     num_evidence = 0
     for rv in g.rvs:
@@ -53,7 +54,7 @@ for i in range(t):
     print('number of evidence', num_evidence)
 
     start_time = time.time()
-    bp.run(10, log_enable=False)
+    bp.run(20, log_enable=False)
     print('time lapse', time.time() - start_time)
 
     # for i in range(t):
@@ -62,4 +63,15 @@ for i in range(t):
         temp.append([idx, bp.map(rv)])
     result.append(temp)
 
-np.save('Data/well_t_prediction_1', np.array(result))
+result = np.array(result)
+
+# np.save('Data/well_t_prediction_1', result)
+
+for idx in range(result.shape[1]):
+    y = []
+    for i in range(t):
+        y.append(result[i, idx, 1])
+
+    plt.plot(list(range(t)), y)
+plt.show()
+

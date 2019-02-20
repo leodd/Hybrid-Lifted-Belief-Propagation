@@ -1,9 +1,6 @@
 from CompressedGraph import *
-from numpy import Inf
-from scipy.integrate import quad
-from scipy.stats import norm
-from scipy.optimize import fmin
-from math import sqrt
+from Potential import GaussianPotential, LinearGaussianPotential, XYPotential, X2Potential
+from numpy import exp, Inf
 
 import time
 
@@ -14,6 +11,12 @@ class GaLBP:
     def __init__(self, g=None):
         self.g = CompressedGraph(g)
         self.message = dict()
+
+    @staticmethod
+    def norm_pdf(x, mu, sig):
+        u = (x - mu) / sig
+        y = exp(-u * u * 0.5) / (2.506628274631 * sig)
+        return y
 
     def message_rv_to_f(self, rv, f):
         if rv.value is None:
@@ -33,39 +36,103 @@ class GaLBP:
             return None
 
     def message_f_to_rv(self, f, rv):
-        # only for pairwise gaussian potential
+        # only for pairwise potential
         if rv.value is not None:
             return None
 
-        u = f.potential.mu
-        a = f.potential.sig ** -1
+        if type(f.potential) == GaussianPotential:
+            u = f.potential.mu
+            a = f.potential.sig ** -1
 
-        rv_idx = 0
-        rv_ = None
-        for idx, nb in enumerate(f.nb):
-            if nb == rv:
-                rv_idx = idx
+            rv_idx = 0
+            rv_ = None
+            for idx, nb in enumerate(f.nb):
+                if nb == rv:
+                    rv_idx = idx
+                else:
+                    rv_ = nb
+
+            if rv_idx == 1:
+                a1, a2, a3 = a[0, 0], a[0, 1], a[1, 1]
+                u1, u2 = u[0], u[1]
             else:
-                rv_ = nb
+                a1, a2, a3 = a[1, 1], a[0, 1], a[0, 0]
+                u1, u2 = u[1], u[0]
 
-        if rv_idx == 1:
-            a1, a2, a3 = a[0, 0], a[0, 1], a[1, 1]
-            u1, u2 = u[0], u[1]
-        else:
-            a1, a2, a3 = a[1, 1], a[0, 1], a[0, 0]
-            u1, u2 = u[1], u[0]
+            if rv_.value is None:
+                m = self.message[(rv_, f)]
+                a4, u3 = m[1] ** -1, m[0]
+                temp = a3 * (a4 + a1) - a2 ** 2
+                mu = a2 * a4 * (u1 - u3) / temp + u2
+                sig = (a3 - a2 ** 2 / (a4 + a1)) ** -1
+            else:
+                mu = -u2 - a2 * (rv_.value - u1) / a3
+                sig = a3 ** -1
 
-        if rv_.value is None:
+            return mu, sig
+
+        elif type(f.potential) == LinearGaussianPotential:
+            h = f.potential.coeff
+            s1 = f.potential.sig
+
+            if h == 0:
+                return 0, Inf
+
+            rv_idx = 0
+            rv_ = None
+            for idx, nb in enumerate(f.nb):
+                if nb == rv:
+                    rv_idx = idx
+                else:
+                    rv_ = nb
+
+            if rv_.value is None:
+                u, s2 = self.message[(rv_, f)]
+                if rv_idx == 0:
+                    mu = u / h
+                    sig = (s1 + s2) / h ** 2
+                else:
+                    mu = u
+                    sig = s2
+            else:
+                if rv_idx == 0:
+                    mu = 0
+                    sig = s1 / h ** 2
+                else:
+                    mu = 0
+                    sig = s1
+
+            return mu, sig
+
+        elif type(f.potential) == XYPotential:
+            h = f.potential.coeff
+            s1 = f.potential.sig
+
+            if h == 0:
+                return 0, Inf
+
+            rv_ = None
+            for nb in f.nb:
+                if nb != rv:
+                    rv_ = nb
+
             m = self.message[(rv_, f)]
-            a4, u3 = m[1] ** -1, m[0]
-            temp = a3 * (a4 + a1) - a2 ** 2
-            mu = a2 * a4 * (u1 - u3) / temp + u2
-            sig = (a3 - a2 ** 2 / (a4 + a1)) ** -1
-        else:
-            mu = -u2 - a2 * (rv_.value - u1) / a3
-            sig = a3 ** -1
+            u, s2 = m
+            mu = 2 * s1 * u / (h * s2)
+            sig = 4 * s1 ** 2 / (h ** 2 * s2)
 
-        return mu, sig
+            return mu, sig
+
+        elif type(f.potential) == X2Potential:
+            h = f.potential.coeff
+            s = f.potential.sig
+
+            if h == 0:
+                return 0, Inf
+
+            return 0, s / h
+
+        return 0, Inf
 
     def run(self, iteration=10, log_enable=False):
         # color passing lifting
@@ -106,13 +173,18 @@ class GaLBP:
                 if log_enable:
                     print(f'\tf to rv {time.clock() - time_start}')
 
-    # def belief(self, x, rv):
-    #     if rv.value is None:
-    #         b = self.belief_rv(x, rv, self.sample)
-    #         z = quad(lambda val: self.belief_rv(val, rv, self.sample), -Inf, Inf)[0]
-    #         return b / z
-    #     else:
-    #         return 1 if x == rv.value else 0
+    def belief(self, x, rv):
+        if rv.value is None:
+            mu, sig = 0, 0
+            for nb in rv.nb:
+                nb_mu, nb_sig = self.message[(nb, rv)]
+                mu += nb_sig ** -1 * nb_mu
+                sig += nb_sig ** -1
+            sig = sig ** -1
+            mu = sig * mu
+            return self.norm_pdf(x, mu, sig)
+        else:
+            return 1 if x == rv.value else 0
 
     def map(self, ground_rv):
         rv = ground_rv.cluster
