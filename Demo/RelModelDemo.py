@@ -8,39 +8,27 @@ import numpy as np
 import time
 
 
-X = np.load('Data/rel_model_instances.npy')
-D = np.load('Data/rel_model_data.npy')
-
 instance_category = []
 instance_bank = []
-for row in X:
-    if row[0] == 'category':
-        instance_category.append(row[1])
-    else:
-        instance_bank.append(row[1])
+for i in range(100):
+    instance_category.append(f'c{i}')
+for i in range(5):
+    instance_bank.append(f'b{i}')
 
-data = dict()
-for row in D:
-    key = tuple([x.strip() for x in row[0].split(',')])
-    if key[0] == 'revenue': continue
-    data[key] = float(row[1])
-data[('recession', 'all')] = 50
-
-domain_percentage = Domain((-50, 50), continuous=True, integral_points=linspace(-50, 50, 30))
-domain_billion = Domain((-50, 50), continuous=True, integral_points=linspace(-50, 50, 30))
+d = Domain((-50, 50), continuous=True, integral_points=linspace(-50, 50, 30))
 
 p1 = GaussianPotential([0., 0.], [[10., -7.], [-7., 10.]])
 p2 = GaussianPotential([0., 0.], [[10., 5.], [5., 10.]])
 p3 = GaussianPotential([0., 0.], [[10., 7.], [7., 10.]])
 
 lv_recession = LV(('all',))
-lv_category = LV(instance_category[:200])
-lv_bank = LV(instance_bank[:10])
+lv_category = LV(instance_category)
+lv_bank = LV(instance_bank)
 
-atom_recession = Atom(domain_percentage, logical_variables=(lv_recession,), name='recession')
-atom_market = Atom(domain_percentage, logical_variables=(lv_category,), name='market')
-atom_loss = Atom(domain_billion, logical_variables=(lv_category, lv_bank), name='loss')
-atom_revenue = Atom(domain_billion, logical_variables=(lv_bank,), name='revenue')
+atom_recession = Atom(d, logical_variables=(lv_recession,), name='recession')
+atom_market = Atom(d, logical_variables=(lv_category,), name='market')
+atom_loss = Atom(d, logical_variables=(lv_category, lv_bank), name='loss')
+atom_revenue = Atom(d, logical_variables=(lv_bank,), name='revenue')
 
 f1 = ParamF(p1, nb=(atom_recession, atom_market))
 f2 = ParamF(p2, nb=(atom_market, atom_loss))
@@ -49,60 +37,102 @@ f3 = ParamF(p3, nb=(atom_loss, atom_revenue))
 rel_g = RelationalGraph()
 rel_g.atoms = (atom_recession, atom_revenue, atom_loss, atom_market)
 rel_g.param_factors = (f1, f2, f3)
-rel_g.data = data
-
 rel_g.init_nb()
-g, rvs_table = rel_g.grounded_graph()
-print('number of vr', len(g.rvs))
-num_evidence = 0
-for rv in g.rvs:
-    if rv.value is not None:
-        num_evidence += 1
-print('number of evidence', num_evidence)
 
-key_table = []
-j = 0
-for key in rvs_table:
-    key_table.append(key)
-    j += 1
-num_test = 1
-result_table = np.zeros((len(rvs_table), num_test))
-time_table = []
+key_list = rel_g.key_list()
+print('number of vr', len(key_list))
+print('number of evidence', int(len(key_list) * 0.05))
 
-for i in range(num_test):
-    # bp = HybridLBP(g, n=20)
+data = dict()
+
+avg_err = dict()
+max_err = dict()
+time_cost = dict()
+
+num_test = 5
+
+for _ in range(num_test):
+    data.clear()
+    idx_evidence = np.random.choice(len(key_list), int(len(key_list) * 0.05), replace=False)
+    for i in idx_evidence:
+        key = key_list[i]
+        data[key] = np.random.uniform(-30, 30)
+
+    rel_g.data = data
+    g, rvs_table = rel_g.grounded_graph()
+
+    ans = dict()
+
+    name = 'GaBP'
+    bp = GaBP(g)
+    start_time = time.process_time()
+    bp.run(15, log_enable=False)
+    time_cost[name] = (time.process_time() - start_time) / num_test + time_cost.get(name, 0)
+    for key in key_list:
+        if key not in data:
+            ans[key] = bp.map(rvs_table[key])
+
+    name = 'LGaBP'
     bp = GaLBP(g)
     start_time = time.process_time()
-    bp.run(20, log_enable=False)
-    time_table.append(time.process_time() - start_time)
+    bp.run(15, log_enable=False)
+    time_cost[name] = (time.process_time() - start_time) / num_test + time_cost.get(name, 0)
+    err = []
+    for key in key_list:
+        if key not in data:
+            err.append(abs(bp.map(rvs_table[key]) - ans[key]))
+    avg_err[name] = np.average(err) / num_test + avg_err.get(name, 0)
+    max_err[name] = np.max(err) / num_test + max_err.get(name, 0)
+    print(name, f'avg err {np.average(err)}')
+    print(name, f'max err {np.max(err)}')
 
-    j = 0
-    for key, rv in rvs_table.items():
-        result_table[j, i] = bp.map(rv)
-        j += 1
+    # name = 'LEPBP'
+    # bp = HybridLBP(g, n=20)
+    # start_time = time.process_time()
+    # bp.run(15, log_enable=False)
+    # time_cost[name] = (time.process_time() - start_time) / num_test + time_cost.get(name, 0)
+    # err = []
+    # for key in key_list:
+    #     if key not in data:
+    #         err.append(abs(bp.map(rvs_table[key]) - ans[key]))
+    # avg_err[name] = np.average(err) / num_test + avg_err.get(name, 0)
+    # max_err[name] = np.max(err) / num_test + max_err.get(name, 0)
+    # print(name, f'avg err {np.average(err)}')
+    # print(name, f'max err {np.max(err)}')
 
-print('average time', np.mean(time_table))
+    # name = 'c2fLEPBP'
+    # bp = HybridLBP(g, n=20)
+    # start_time = time.process_time()
+    # bp.run(15, c2f=True, log_enable=False)
+    # time_cost[name] = (time.process_time() - start_time) / num_test + time_cost.get(name, 0)
+    # err = []
+    # for key in key_list:
+    #     if key not in data:
+    #         err.append(abs(bp.map(rvs_table[key]) - ans[key]))
+    # avg_err[name] = np.average(err) / num_test + avg_err.get(name, 0)
+    # max_err[name] = np.max(err) / num_test + max_err.get(name, 0)
+    # print(name, f'avg err {np.average(err)}')
+    # print(name, f'max err {np.max(err)}')
 
-# for i in range(len(rvs_table)):
-#     key = key_table[i]
-#     mean = np.mean(result_table[i])
-#     variance = np.var(result_table[i])
-#     print(key, mean, variance)
+    # name = 'EPBP'
+    # bp = HybridLBP(g, n=20)
+    # start_time = time.process_time()
+    # bp.run(15, log_enable=False)
+    # time_cost[name] = (time.process_time() - start_time) / num_test + time_cost.get(name, 0)
+    # err = []
+    # for key in key_list:
+    #     if key not in data:
+    #         err.append(abs(bp.map(rvs_table[key]) - ans[key]))
+    # avg_err[name] = np.average(err) / num_test + avg_err.get(name, 0)
+    # max_err[name] = np.max(err) / num_test + max_err.get(name, 0)
+    # print(name, f'avg err {np.average(err)}')
+    # print(name, f'max err {np.max(err)}')
 
-bp = GaBP(g)
-bp.run(20, log_enable=False)
+print('######################')
+for name, v in time_cost.items():
+    print(name, f'avg time {v}')
+for name, v in avg_err.items():
+    print(name, f'avg err {v}')
+for name, v in max_err.items():
+    print(name, f'max err {v}')
 
-# for key, rv in rvs_table.items():
-#     print(key, bp.map(rv))
-
-i = 0
-err_history = list()
-for key, rv in rvs_table.items():
-    ans = bp.map(rv)
-    err = result_table[i] - ans
-    mean_l1_err = np.average(abs(err))
-    err_history.append(mean_l1_err)
-    print(key, np.average(result_table[i]), mean_l1_err)
-    i += 1
-print('average err', np.average(err_history))
-print('max err', np.max(err_history))

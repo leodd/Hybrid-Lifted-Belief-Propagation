@@ -59,6 +59,15 @@ class RelationalGraph:
         for combination in product(*table):
             yield dict(zip(lvs, combination))
 
+    def key_list(self):
+        res = list()
+        for atom in self.atoms:
+            for substitution in self.lvs_iter(atom.lvs):
+                key = atom.key(substitution)
+                res.append(key)
+
+        return res
+
     def grounded_graph(self):
         grounded_factors = set()
         grounded_rvs_table = dict()

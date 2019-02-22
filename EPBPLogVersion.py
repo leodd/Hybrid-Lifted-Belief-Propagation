@@ -137,8 +137,8 @@ class EPBP:
         mu = mu / z
         sig = sig / z - mu ** 2
 
-        if sig >= cavity[1]:
-            return self.eta_approximation_simple(f, rv)
+        # if sig >= cavity[1]:
+        #     return self.eta_approximation_simple(f, rv)
 
         # approximate eta
         return self.gaussian_division((mu, sig), cavity)
@@ -198,6 +198,8 @@ class EPBP:
             shift = mean_m
         for k, v in message.items():
             message[k] = v - shift
+
+        return shift
 
     @staticmethod
     def message_normalization(message):
@@ -271,13 +273,35 @@ class EPBP:
                     print(f'\tf to rv {time.clock() - time_start}')
                     time_start = time.clock()
 
+    def log_area(self, f, a, b, n):
+        res = 0
+        x = linspace(a, b, n)
+        d = x[1] - x[0]
+        y = dict()
+        for i, v in enumerate(x):
+            y[i] = f(v)
+        shift = self.log_message_balance(y)
+        prev = e ** y[0]
+        for i in range(1, n):
+            current = e ** y[i]
+            res += (prev + current) * d
+            prev = current
+        return res * 0.5, shift
+
     def belief(self, x, rv):
         if rv.value is None:
-            b = e ** self.belief_rv(x, rv, self.sample)
-            z = quad(
-                lambda val: e ** self.belief_rv(val, rv, self.sample),
-                rv.domain.values[0], rv.domain.values[1]
-            )[0]
+            # z = quad(
+            #     lambda val: e ** self.belief_rv(val, rv, self.sample),
+            #     rv.domain.values[0], rv.domain.values[1]
+            # )[0]
+            z, shift = self.log_area(
+                lambda val: self.belief_rv(val, rv, self.sample),
+                rv.domain.values[0], rv.domain.values[1],
+                20
+            )
+
+            b = e ** (self.belief_rv(x, rv, self.sample) - shift)
+
             return b / z
         else:
             return 1 if x == rv.value else 0

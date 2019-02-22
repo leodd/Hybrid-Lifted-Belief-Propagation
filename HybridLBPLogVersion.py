@@ -15,8 +15,8 @@ import time
 class HybridLBP:
     # Hybrid lifted particle belief propagation
 
-    var_threshold = 1
-    max_log_value = 350
+    var_threshold = 5
+    max_log_value = 700
 
     def __init__(self,
                  g,
@@ -393,9 +393,9 @@ class HybridLBP:
     # main running function
     ###########################
 
-    def run(self, iteration=10, log_enable=False):
+    def run(self, iteration=10, log_enable=False, c2f=False):
         # initialize cluster
-        self.g.init_cluster(False)  # set to false for enabling coarse to fine lifting
+        self.g.init_cluster(not c2f)  # set to false for enabling coarse to fine lifting
         self.g.split_evidence(2, 50)
         self.g.split_factors()
         self.g.split_rvs()
