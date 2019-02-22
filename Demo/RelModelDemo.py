@@ -26,7 +26,7 @@ for row in D:
     data[key] = float(row[1])
 data[('recession', 'all')] = 50
 
-domain_percentage = Domain((-100, 100), continuous=True, integral_points=linspace(-100, 100, 30))
+domain_percentage = Domain((-50, 50), continuous=True, integral_points=linspace(-50, 50, 30))
 domain_billion = Domain((-50, 50), continuous=True, integral_points=linspace(-50, 50, 30))
 
 p1 = GaussianPotential([0., 0.], [[10., -7.], [-7., 10.]])
@@ -34,8 +34,8 @@ p2 = GaussianPotential([0., 0.], [[10., 5.], [5., 10.]])
 p3 = GaussianPotential([0., 0.], [[10., 7.], [7., 10.]])
 
 lv_recession = LV(('all',))
-lv_category = LV(instance_category[:50])
-lv_bank = LV(instance_bank[:5])
+lv_category = LV(instance_category[:200])
+lv_bank = LV(instance_bank[:10])
 
 atom_recession = Atom(domain_percentage, logical_variables=(lv_recession,), name='recession')
 atom_market = Atom(domain_percentage, logical_variables=(lv_category,), name='market')

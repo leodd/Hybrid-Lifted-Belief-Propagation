@@ -1,7 +1,6 @@
 from Graph import Potential
 import numpy as np
-from math import pow, pi, e, sqrt
-from scipy.stats import norm
+from math import pow, pi, e, sqrt, exp
 
 
 class TablePotential(Potential):
@@ -97,16 +96,8 @@ class ImageNodePotential(Potential):
         self.sig = sig
 
     def get(self, parameters):
-        return norm(self.mu, self.sig).pdf(parameters[0] - parameters[1])
-
-
-# class ImageEdgePotential:
-#     def __init__(self, mu, sig):
-#         self.mu = mu
-#         self.sig = sig
-#
-#     def get(self, parameters):
-#         return 0.1 + 20 * norm(self.mu, self.sig).pdf(parameters[0] - parameters[1])
+        u = (parameters[0] - parameters[1] - self.mu) / self.sig
+        return exp(-u * u * 0.5) / (2.506628274631 * self.sig)
 
 
 class ImageEdgePotential(Potential):

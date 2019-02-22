@@ -10,8 +10,8 @@ X = np.load('Data/smoker_instances.npy')
 D = np.load('Data/smoker_data.npy')
 
 people = []
-for p in X:
-    people.append(p[1])
+for p in range(200):
+    people.append(f'p{p}')
 
 data = dict()
 for line in D:
@@ -53,14 +53,12 @@ for rv in g.rvs:
         num_evidence += 1
 print('number of evidence', num_evidence)
 
-bp = EPBP(g, n=20, proposal_approximation='simple')
+bp = HybridLBP(g, n=20, proposal_approximation='simple')
 start_time = time.process_time()
 bp.run(10, log_enable=False)
 print('time', time.process_time() - start_time)
 
 for key, rv in rvs_table.items():
     v = bp.map(rv)
-    p = list()
-    for i in [0, 0.2, 0.4, 0.6, 0.8, 1]:
-        p.append(bp.belief(i, rv))
-    print(key, v, p)
+    b = bp.belief(v, rv)
+    print(key, v, b)

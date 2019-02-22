@@ -224,6 +224,8 @@ class HybridLBP:
         for k, v in message.items():
             message[k] = v - shift
 
+        return shift
+
     @staticmethod
     def message_normalization(message):
         z = 0
@@ -304,18 +306,20 @@ class HybridLBP:
             res += self.message_f_to_rv(x, f.cluster, rv.cluster, sample)
         return res
 
-    # @staticmethod
-    # def area(f, a, b, n):
-    #     res = 0
-    #     x = linspace(a, b, n)
-    #     print(x)
-    #     d = x[1] - x[0]
-    #     prev = f(x[0])
-    #     for i in range(1, n):
-    #         current = f(x[i])
-    #         res += (prev + current) * d
-    #         prev = current
-    #     return res * 0.5
+    def log_area(self, f, a, b, n):
+        res = 0
+        x = linspace(a, b, n)
+        d = x[1] - x[0]
+        y = dict()
+        for i, v in enumerate(x):
+            y[i] = f(v)
+        shift = self.log_message_balance(y)
+        prev = e ** y[0]
+        for i in range(1, n):
+            current = e ** y[i]
+            res += (prev + current) * d
+            prev = current
+        return res * 0.5, shift
 
     def belief(self, x, rv):
         if rv.value is None:
@@ -323,20 +327,20 @@ class HybridLBP:
 
             if rv.domain.continuous:
                 if signature in self.query_cache:
-                    z = self.query_cache[signature]
+                    z, shift = self.query_cache[signature]
                 else:
-                    z = quad(
-                        lambda val: e ** self.belief_rv_query(val, rv, self.sample),
-                        rv.domain.values[0], rv.domain.values[1]
-                    )[0]
-                    # z = self.area(
+                    # z = quad(
                     #     lambda val: e ** self.belief_rv_query(val, rv, self.sample),
-                    #     rv.domain.values[0], rv.domain.values[1],
-                    #     20
-                    # )
-                    self.query_cache[signature] = z
+                    #     rv.domain.values[0], rv.domain.values[1]
+                    # )[0]
+                    z, shift = self.log_area(
+                        lambda val: self.belief_rv_query(val, rv, self.sample),
+                        rv.domain.values[0], rv.domain.values[1],
+                        20
+                    )
+                    self.query_cache[signature] = z, shift
 
-                b = e ** self.belief_rv_query(x, rv, self.sample)
+                b = e ** (self.belief_rv_query(x, rv, self.sample) - shift)
 
                 return b / z
             else:
@@ -391,7 +395,7 @@ class HybridLBP:
 
     def run(self, iteration=10, log_enable=False):
         # initialize cluster
-        self.g.init_cluster()
+        self.g.init_cluster(False)  # set to false for enabling coarse to fine lifting
         self.g.split_evidence(2, 50)
         self.g.split_factors()
         self.g.split_rvs()

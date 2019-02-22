@@ -12,6 +12,7 @@ import matplotlib.pyplot as plt
 
 cluster_mat = scipy.io.loadmat('Data/cluster_NcutDiscrete.mat')['NcutDiscrete']
 well_t = scipy.io.loadmat('Data/well_t.mat')['well_t']
+print(well_t.shape)
 
 # idx = np.where(cluster_mat[:, 1] == 1)[0]
 # cluster_mat[idx[3:], 1] = 0
