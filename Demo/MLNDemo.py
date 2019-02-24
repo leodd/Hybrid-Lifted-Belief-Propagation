@@ -80,11 +80,11 @@ for key in key_list:
     ans_array.append((f'{key[0]},{key[1]}', ans[key]))
 np.save('Data/smoker_ans', np.array(ans_array))
 
-# load ans
-ans_array = np.load('Data/smoker_ans.npy')
-for line in ans_array:
-    key = tuple([x.strip() for x in line[0].split(',')])
-    ans[key] = float(line[1])
+# # load ans
+# ans_array = np.load('Data/smoker_ans.npy')
+# for line in ans_array:
+#     key = tuple([x.strip() for x in line[0].split(',')])
+#     ans[key] = float(line[1])
 
 name = 'LEPBP'
 res = np.zeros((len(key_list), num_test))

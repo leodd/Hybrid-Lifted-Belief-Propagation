@@ -35,24 +35,6 @@ rel_g.atoms = (atom_smoke, atom_cancer, atom_friend)
 rel_g.param_factors = (f1, f2)
 rel_g.init_nb()
 
-data = dict()
-
-for a in range(num_people):
-    idx = np.random.choice(num_people, int(num_people * 0.1), replace=False)
-    for b in idx:
-        if a < b:
-            data[('friend', f'p{a}', f'p{b}')] = np.random.choice([0, 1])
-
-A = np.random.choice(num_people, int(num_people * 0.1), replace=False)
-for a in A:
-    data[('smoke', f'p{a}')] = np.random.random_sample()
-
-rel_g.data = data
-g, rvs_table = rel_g.grounded_graph()
-
-print('number of vr', len(g.rvs))
-print('number of evidence', len(data))
-
 key_list = list()
 for p in range(num_people):
     key_list.append(('cancer', f'p{p}'))
@@ -60,76 +42,91 @@ for p in range(num_people):
 num_test = 5
 
 avg_diff = dict()
-variance = dict()
+err_var = dict()
 time_cost = dict()
 
-ans = dict()
+data = dict()
 
-name = 'EPBP'
-res = np.zeros((len(key_list), num_test))
-for j in range(num_test):
-    bp = EPBP(g, n=10, proposal_approximation='simple')
-    start_time = time.process_time()
-    bp.run(10, log_enable=False)
-    time_cost[name] = (time.process_time() - start_time) / num_test + time_cost.get(name, 0)
-    print(name, f'time {time.process_time() - start_time}')
+for _ in range(num_test):
+    data.clear()
+
+    A = np.random.choice(num_people, int(num_people * 0.1), replace=False)
+    temp = set()
+    for a in A:
+        data[('smoke', f'p{a}')] = np.random.random_sample()
+        idx = np.random.choice(num_people, 5, replace=False)
+        for b in idx:
+            if a < b and (a, b) not in temp:
+                data[('friend', f'p{a}', f'p{b}')] = np.random.choice([0, 1])
+                temp.add((a, b))
+            elif a > b and (b, a) not in temp:
+                data[('friend', f'p{b}', f'p{a}')] = np.random.choice([0, 1])
+                temp.add((b, a))
+
+    rel_g.data = data
+    g, rvs_table = rel_g.grounded_graph()
+
+    print('number of vr', len(g.rvs))
+    print('number of evidence', len(data))
+
+    ans = dict()
+
+    name = 'EPBP'
+    res = np.zeros((len(key_list), num_test))
+    for j in range(5):
+        bp = EPBP(g, n=10, proposal_approximation='simple')
+        start_time = time.process_time()
+        bp.run(10, log_enable=False)
+        time_cost[name] = (time.process_time() - start_time) / 5 / num_test + time_cost.get(name, 0)
+        print(name, f'time {time.process_time() - start_time}')
+        for i, key in enumerate(key_list):
+            res[i, j] = bp.probability(0.8, 1, rvs_table[key])
     for i, key in enumerate(key_list):
-        res[i, j] = bp.probability(0.8, 1, rvs_table[key])
-for i, key in enumerate(key_list):
-    ans[key] = np.average(res[i, :])
-variance[name] = np.average(np.var(res, axis=1))
-print(name, 'var', variance[name])
-
-# save ans
-ans_array = list()
-for key in key_list:
-    ans_array.append((f'{key[0]},{key[1]}', ans[key]))
-np.save('Data/smoker_ans', np.array(ans_array))
-
-# load ans
-ans_array = np.load('Data/smoker_ans.npy')
-for line in ans_array:
-    key = tuple([x.strip() for x in line[0].split(',')])
-    ans[key] = float(line[1])
-
-name = 'LEPBP'
-res = np.zeros((len(key_list), num_test))
-for j in range(num_test):
-    bp = HybridLBP(g, n=10, proposal_approximation='simple')
-    start_time = time.process_time()
-    bp.run(10, log_enable=False)
-    time_cost[name] = (time.process_time() - start_time) / num_test + time_cost.get(name, 0)
-    print(name, f'time {time.process_time() - start_time}')
+        ans[key] = np.average(res[i, :])
     for i, key in enumerate(key_list):
-        res[i, j] = bp.probability(0.8, 1, rvs_table[key])
-variance[name] = np.average(np.var(res, axis=1))
-for i, key in enumerate(key_list):
-    res[i, :] -= ans[key]
-avg_diff[name] = np.average(np.average(abs(res), axis=1))
-print(name, 'var', variance[name])
-print(name, 'diff', avg_diff[name])
+        res[i, :] -= ans[key]
+    avg_diff[name] = np.average(np.average(abs(res), axis=1)) / num_test + avg_diff.get(name, 0)
+    err_var[name] = np.average(np.average(res ** 2, axis=1)) / num_test + err_var.get(name, 0)
+    print(name, 'diff', np.average(np.average(abs(res), axis=1)))
+    print(name, 'var', np.average(np.average(res ** 2, axis=1)) - np.average(np.average(abs(res), axis=1)) ** 2)
 
-name = 'C2FEPBP'
-res = np.zeros((len(key_list), num_test))
-for j in range(num_test):
-    bp = HybridLBP(g, n=10, proposal_approximation='simple')
-    start_time = time.process_time()
-    bp.run(10, c2f=True, log_enable=False)
-    time_cost[name] = (time.process_time() - start_time) / num_test + time_cost.get(name, 0)
-    print(name, f'time {time.process_time() - start_time}')
+    name = 'LEPBP'
+    res = np.zeros((len(key_list), num_test))
+    for j in range(5):
+        bp = HybridLBP(g, n=10, proposal_approximation='simple')
+        start_time = time.process_time()
+        bp.run(10, log_enable=False)
+        time_cost[name] = (time.process_time() - start_time) / 5 / num_test + time_cost.get(name, 0)
+        print(name, f'time {time.process_time() - start_time}')
+        for i, key in enumerate(key_list):
+            res[i, j] = bp.probability(0.8, 1, rvs_table[key])
     for i, key in enumerate(key_list):
-        res[i, j] = bp.probability(0.8, 1, rvs_table[key])
-variance[name] = np.average(np.var(res, axis=1))
-for i, key in enumerate(key_list):
-    res[i, :] -= ans[key]
-avg_diff[name] = np.average(np.average(abs(res), axis=1))
-print(name, 'var', variance[name])
-print(name, 'diff', avg_diff[name])
+        res[i, :] -= ans[key]
+    avg_diff[name] = np.average(np.average(abs(res), axis=1)) / num_test + avg_diff.get(name, 0)
+    err_var[name] = np.average(np.average(res ** 2, axis=1)) / num_test + err_var.get(name, 0)
+    print(name, 'diff', np.average(np.average(abs(res), axis=1)))
+    print(name, 'var', np.average(np.average(res ** 2, axis=1)) - np.average(np.average(abs(res), axis=1)) ** 2)
+
+    name = 'C2FEPBP'
+    res = np.zeros((len(key_list), num_test))
+    for j in range(5):
+        bp = HybridLBP(g, n=10, proposal_approximation='simple')
+        start_time = time.process_time()
+        bp.run(10, c2f=True, log_enable=False)
+        time_cost[name] = (time.process_time() - start_time) / 5 / num_test + time_cost.get(name, 0)
+        print(name, f'time {time.process_time() - start_time}')
+        for i, key in enumerate(key_list):
+            res[i, j] = bp.probability(0.8, 1, rvs_table[key])
+    for i, key in enumerate(key_list):
+        res[i, :] -= ans[key]
+    avg_diff[name] = np.average(np.average(abs(res), axis=1)) / num_test + avg_diff.get(name, 0)
+    err_var[name] = np.average(np.average(res ** 2, axis=1)) / num_test + err_var.get(name, 0)
+    print(name, 'diff', np.average(np.average(abs(res), axis=1)))
+    print(name, 'var', np.average(np.average(res ** 2, axis=1)) - np.average(np.average(abs(res), axis=1)) ** 2)
 
 print('######################')
 for name, v in time_cost.items():
     print(name, f'avg time {v}')
 for name, v in avg_diff.items():
     print(name, f'diff {v}')
-for name, v in variance.items():
-    print(name, f'var {v}')
+    print(name, f'std {np.sqrt(err_var[name] - v ** 2)}')
