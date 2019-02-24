@@ -29,6 +29,13 @@ class SuperRV:
     def get_cluster(instance):
         return instance.cluster
 
+    @staticmethod
+    def get_rv_value(rv):
+        return rv.value
+
+    def get_variance(self):
+        return np.var(tuple(map(self.get_rv_value, self.rvs)))
+
     def update_nb(self):
         rv = next(iter(self.rvs))
         self.count = Counter(map(self.get_cluster, rv.nb))

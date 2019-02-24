@@ -5,11 +5,14 @@ from EPBPLogVersion import EPBP
 import numpy as np
 import time
 
+
+num_people = 100
+
 people = []
-for p in range(100):
+for p in range(num_people):
     people.append(f'p{p}')
 
-domain_bool = Domain((0, 1), continuous=False)
+domain_bool = Domain((0, 1))
 domain_real = Domain((0, 1), continuous=True, integral_points=linspace(0, 1, 10))
 
 lv_x = LV(people)
@@ -26,9 +29,6 @@ f2 = ParamF(
     nb=(atom_friend, atom_smoke, atom_smoke_y),
     constrain=lambda s: s[lv_x] < s[lv_y]
 )
-f3 = ParamF(MLNPotential(lambda x: imp_op(1 - x[0], 1 - x[1]), w=1), nb=(atom_smoke, atom_cancer))
-f4 = ParamF(MLNNodePotential(), nb=(atom_smoke,))
-f5 = ParamF(MLNNodePotential(), nb=(atom_cancer,))
 
 rel_g = RelationalGraph()
 rel_g.atoms = (atom_smoke, atom_cancer, atom_friend)
@@ -36,10 +36,16 @@ rel_g.param_factors = (f1, f2)
 rel_g.init_nb()
 
 data = dict()
-D = np.load('Data/smoker_data.npy')
-for line in D:
-    key = tuple([x.strip() for x in line[0].split(',')])
-    data[key] = float(line[1])
+
+for a in range(num_people):
+    idx = np.random.choice(num_people, int(num_people * 0.1), replace=False)
+    for b in idx:
+        if a < b:
+            data[('friend', f'p{a}', f'p{b}')] = np.random.choice([0, 1])
+
+A = np.random.choice(num_people, int(num_people * 0.1), replace=False)
+for a in A:
+    data[('smoke', f'p{a}')] = np.random.random_sample()
 
 rel_g.data = data
 g, rvs_table = rel_g.grounded_graph()
@@ -48,7 +54,7 @@ print('number of vr', len(g.rvs))
 print('number of evidence', len(data))
 
 key_list = list()
-for p in range(100):
+for p in range(num_people):
     key_list.append(('cancer', f'p{p}'))
 
 num_test = 5
@@ -64,7 +70,7 @@ res = np.zeros((len(key_list), num_test))
 for j in range(num_test):
     bp = EPBP(g, n=10, proposal_approximation='simple')
     start_time = time.process_time()
-    bp.run(10, log_enable=True)
+    bp.run(10, log_enable=False)
     time_cost[name] = (time.process_time() - start_time) / num_test + time_cost.get(name, 0)
     print(name, f'time {time.process_time() - start_time}')
     for i, key in enumerate(key_list):
@@ -91,7 +97,7 @@ res = np.zeros((len(key_list), num_test))
 for j in range(num_test):
     bp = HybridLBP(g, n=10, proposal_approximation='simple')
     start_time = time.process_time()
-    bp.run(10, log_enable=True)
+    bp.run(10, log_enable=False)
     time_cost[name] = (time.process_time() - start_time) / num_test + time_cost.get(name, 0)
     print(name, f'time {time.process_time() - start_time}')
     for i, key in enumerate(key_list):

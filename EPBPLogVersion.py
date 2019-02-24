@@ -1,4 +1,5 @@
 from Graph import *
+import numpy as np
 from numpy import Inf, exp
 from scipy.integrate import quad
 from scipy.stats import norm
@@ -54,9 +55,11 @@ class EPBP:
         sample = dict()
         for rv in self.g.rvs:
             if rv.value is None:
-                sample[rv] = norm(self.q[rv][0], sqrt(self.q[rv][1])).rvs(self.n)
-            else:
-                sample[rv] = (rv.value,)
+                if rv.domain.continuous:
+                    sample[rv] = np.clip(norm(self.q[rv][0], sqrt(self.q[rv][1])).rvs(self.n),
+                                         a_min=rv.domain.values[0], a_max=rv.domain.values[1])
+                else:
+                    sample[rv] = rv.domain.values
         return sample
 
     def initial_proposal(self):
@@ -145,7 +148,7 @@ class EPBP:
 
     def important_weight(self, x, rv):
         if rv.value is None:
-            return max(self.norm_pdf(x, self.q[rv][0], sqrt(self.q[rv][1])), 1e-200)
+            return 1 / max(self.norm_pdf(x, self.q[rv][0], sqrt(self.q[rv][1])), 1e-200)
         else:
             return 1
 
@@ -159,8 +162,6 @@ class EPBP:
                 if nb != f:
                     res += self.message[(nb, rv)][x]
             return res + log(self.important_weight(x, rv))
-        else:
-            return 0
 
     def message_f_to_rv(self, x, f, rv, sample):
         # sample is a set of sample points of neighbouring rvs
@@ -170,13 +171,15 @@ class EPBP:
         for nb in f.nb:
             if nb == rv:
                 param.append((x,))
-            else:
+            elif nb.value is None:
                 param.append(sample[nb])
+            else:
+                param.append((nb.value,))
         for x_join in product(*param):
             m = 0
-            for i in range(len(f.nb)):
-                if f.nb[i] != rv:
-                    m += self.message[(f.nb[i], f)][x_join[i]]
+            for idx, nb in enumerate(f.nb):
+                if nb != rv and nb.value is None:
+                    m += self.message[(nb, f)][x_join[idx]]
             res += f.potential.get(x_join) * e ** m
         return log(res) if res > 0 else -700
 
@@ -218,14 +221,15 @@ class EPBP:
 
         # initialize log message to 0 (message from f to rv)
         for rv in self.g.rvs:
-            for f in rv.nb:
-                m = {k: 0 for k in self.sample[rv]}
-                if rv.domain.continuous:
-                    eta_m = {k: 0 for k in rv.domain.integral_points}
-                    self.message[(f, rv)] = {**m, **eta_m}
-                else:
-                    self.message[(f, rv)] = m
-                self.message[(rv, f)] = m
+            if rv.value is None:
+                for f in rv.nb:
+                    m = {k: 0 for k in self.sample[rv]}
+                    if rv.domain.continuous:
+                        eta_m = {k: 0 for k in rv.domain.integral_points}
+                        self.message[(f, rv)] = {**m, **eta_m}
+                    else:
+                        self.message[(f, rv)] = m
+                    self.message[(rv, f)] = m
 
         # BP iteration
         for i in range(iteration):
@@ -234,13 +238,14 @@ class EPBP:
                 time_start = time.clock()
             # calculate messages from rv to f
             for rv in self.g.rvs:
-                for f in rv.nb:
-                    # compute the message for each sample point
-                    m = dict()
-                    for point in self.sample[rv]:
-                        m[point] = self.message_rv_to_f(point, rv, f)
-                    self.log_message_balance(m)
-                    self.message[(rv, f)] = m
+                if rv.value is None:
+                    for f in rv.nb:
+                        # compute the message for each sample point
+                        m = dict()
+                        for point in self.sample[rv]:
+                            m[point] = self.message_rv_to_f(point, rv, f)
+                        self.log_message_balance(m)
+                        self.message[(rv, f)] = m
 
             if log_enable:
                 print(f'\trv to f {time.clock() - time_start}')
@@ -273,14 +278,18 @@ class EPBP:
                     print(f'\tf to rv {time.clock() - time_start}')
                     time_start = time.clock()
 
-    def log_area(self, f, a, b, n):
+    def log_area(self, f, a, b, n, shift=None):
         res = 0
         x = linspace(a, b, n)
         d = x[1] - x[0]
         y = dict()
         for i, v in enumerate(x):
             y[i] = f(v)
-        shift = self.log_message_balance(y)
+        if shift is None:
+            shift = self.log_message_balance(y)
+        else:
+            for k, v in y.items():
+                y[k] = v - shift
         prev = e ** y[0]
         for i in range(1, n):
             current = e ** y[i]
@@ -305,6 +314,27 @@ class EPBP:
             return b / z
         else:
             return 1 if x == rv.value else 0
+
+    def probability(self, a, b, rv):
+        # only for continuous hidden variable
+        if rv.value is None:
+            if rv.domain.continuous:
+                z, shift = self.log_area(
+                    lambda val: self.belief_rv(val, rv, self.sample),
+                    rv.domain.values[0], rv.domain.values[1],
+                    20
+                )
+
+                b, _ = self.log_area(
+                    lambda val: self.belief_rv(val, rv, self.sample),
+                    a, b,
+                    5,
+                    shift
+                )
+
+                return b / z
+
+        return None
 
     def map(self, rv):
         if rv.value is None:

@@ -238,16 +238,22 @@ class HybridLBP:
     # color passing functions
     ###########################
 
-    def split_evidence(self, k=2, iteration=10):
+    def split_evidence(self, k=2, iteration=10, epsilon=0):
         temp = set()
-        for rv in self.g.continuous_evidence:
-            # split evidence
-            new_rvs = rv.split_by_evidence(k, iteration)
-
-            if len(new_rvs) > 1:
+        for rv in self.g.rvs:
+            if rv.value is not None and rv.get_variance() > epsilon:
+                # split evidence
+                new_rvs = rv.split_by_evidence(k, iteration)
                 temp |= new_rvs
 
-        self.g.continuous_evidence = temp
+        # for rv in self.g.continuous_evidence:
+        #     # split evidence
+        #     new_rvs = rv.split_by_evidence(k, iteration)
+        #
+        #     if len(new_rvs) > 1:
+        #         temp |= new_rvs
+        #
+        # self.g.continuous_evidence = temp
         self.g.rvs |= temp
 
     def split_rvs(self):
@@ -306,14 +312,18 @@ class HybridLBP:
             res += self.message_f_to_rv(x, f.cluster, rv.cluster, sample)
         return res
 
-    def log_area(self, f, a, b, n):
+    def log_area(self, f, a, b, n, shift=None):
         res = 0
         x = linspace(a, b, n)
         d = x[1] - x[0]
         y = dict()
         for i, v in enumerate(x):
             y[i] = f(v)
-        shift = self.log_message_balance(y)
+        if shift is None:
+            shift = self.log_message_balance(y)
+        else:
+            for k, v in y.items():
+                y[k] = v - shift
         prev = e ** y[0]
         for i in range(1, n):
             current = e ** y[i]
@@ -356,6 +366,27 @@ class HybridLBP:
                 return b[x]
         else:
             return 1 if x == rv.value else 0
+
+    def probability(self, a, b, rv):
+        # only for continuous hidden variable
+        if rv.value is None:
+            if rv.domain.continuous:
+                z, shift = self.log_area(
+                    lambda val: self.belief_rv_query(val, rv, self.sample),
+                    rv.domain.values[0], rv.domain.values[1],
+                    20
+                )
+
+                b, _ = self.log_area(
+                    lambda val: self.belief_rv_query(val, rv, self.sample),
+                    a, b,
+                    5,
+                    shift
+                )
+
+                return b / z
+
+        return None
 
     def map(self, rv):
         if rv.value is None:
@@ -418,6 +449,13 @@ class HybridLBP:
                         self.message[(f, rv)] = m
                     self.message[(rv, f)] = m
 
+        epsilon = 0
+        for rv in self.g.rvs:
+            if rv.value is not None:
+                epsilon = max(rv.get_variance(), epsilon)
+        d = epsilon / iteration
+        epsilon -= d
+
         # LBP iteration
         for i in range(iteration):
             print(f'iteration: {i + 1}')
@@ -425,7 +463,8 @@ class HybridLBP:
                 time_start = time.clock()
 
             if i > 0:
-                self.split_evidence(self.k_mean_k, self.k_mean_iteration)
+                self.split_evidence(self.k_mean_k, self.k_mean_iteration, epsilon=epsilon)
+                epsilon -= d
                 if log_enable:
                     print(f'\tevidence {time.clock() - time_start}')
                     time_start = time.clock()
@@ -436,6 +475,7 @@ class HybridLBP:
                     time_start = time.clock()
 
             # calculate messages from rv to f
+            print(len(self.g.rvs))
             for rv in self.g.rvs:
                 if rv.value is None:
                     for f in rv.nb:
