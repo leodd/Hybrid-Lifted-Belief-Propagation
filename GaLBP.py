@@ -114,7 +114,7 @@ class GaLBP:
             if h == 0:
                 return 0, Inf
 
-            rv_ = None
+            rv_ = rv
             for nb in f.nb:
                 if nb != rv:
                     rv_ = nb

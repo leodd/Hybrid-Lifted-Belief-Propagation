@@ -42,6 +42,7 @@ domain = Domain((-4, 4), continuous=True, integral_points=linspace(-4, 4, 30))
 num_test = param.shape[1]
 
 result = np.zeros([n_sum, num_test])
+ans2 = np.zeros([n_sum, num_test])
 time_cost = list()
 for i in range(num_test):
     kmf = KalmanFilter(domain,
@@ -52,7 +53,6 @@ for i in range(num_test):
 
     g, rvs_table = kmf.grounded_graph(t, data)
     bp = EPBP(g, n=50, proposal_approximation='simple')
-    # bp = GaBP(g)
     print('number of vr', len(g.rvs))
     num_evidence = 0
     for rv in g.rvs:
@@ -68,13 +68,25 @@ for i in range(num_test):
     for idx, rv in enumerate(rvs_table[t - 1]):
         result[idx, i] = bp.map(rv)
 
+    bp = GaLBP(g)
+    bp.run(20, log_enable=False)
+
+    for idx, rv in enumerate(rvs_table[t - 1]):
+        ans2[idx, i] = bp.map(rv)
+
     print(f'avg err {np.average(result[:, i] - ans[:, i])}')
+    print(f'avg err2 {np.average(result[:, i] - ans2[:, i])}')
 
 err = abs(result - ans)
 err = np.average(err, axis=0)
+
+err2 = abs(result - ans)
+err2 = np.average(err2, axis=0)
 
 print('########################')
 print(f'avg time {np.average(time_cost)}')
 print(f'avg err {np.average(err)}')
 print(f'err std {np.std(err)}')
+print(f'avg err2 {np.average(err2)}')
+print(f'err std2 {np.std(err2)}')
 
