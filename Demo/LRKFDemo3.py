@@ -19,7 +19,7 @@ print(well_t.shape)
 idx = np.where(cluster_mat[:, 1] == 1)[0]
 cluster_mat[idx[3:], 1] = 0
 idx = np.where(cluster_mat[:, 2] == 1)[0]
-cluster_mat[idx[:48], 2] = 0
+cluster_mat[idx[:49], 2] = 0
 cluster_mat[idx[52:], 2] = 0
 
 well_t = well_t[:, 199:]
@@ -51,8 +51,8 @@ for i in range(num_test):
                        param[1, i])
 
     g, rvs_table = kmf.grounded_graph(t, data)
-    bp = HybridLBP(g, n=50, proposal_approximation='simple')
-    # bp = GaLBP(g)
+    bp = EPBP(g, n=50, proposal_approximation='simple')
+    # bp = GaBP(g)
     print('number of vr', len(g.rvs))
     num_evidence = 0
     for rv in g.rvs:
