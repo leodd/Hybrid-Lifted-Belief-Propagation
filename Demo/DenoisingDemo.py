@@ -66,7 +66,7 @@ g.rvs = rvs + evidence
 g.factors = fs
 g.init_nb()
 
-bp = EPBP(g, n=10, proposal_approximation='simple')
+bp = HybridLBP(g, n=10, proposal_approximation='simple')
 
 # def initial_proposal():
 #     for i in range(row):
@@ -76,7 +76,7 @@ bp = EPBP(g, n=10, proposal_approximation='simple')
 # bp.custom_initial_proposal = initial_proposal
 
 start_time = time.process_time()
-bp.run(10,  log_enable=False)
+bp.run(10, c2f=5, log_enable=False)
 print('time', time.process_time() - start_time)
 
 print(len(bp.g.rvs))

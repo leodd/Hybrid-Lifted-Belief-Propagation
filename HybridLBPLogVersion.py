@@ -424,12 +424,19 @@ class HybridLBP:
     # main running function
     ###########################
 
-    def run(self, iteration=10, log_enable=False, c2f=False):
+    def run(self, iteration=10, log_enable=False, c2f=-1):
         # initialize cluster
-        self.g.init_cluster(not c2f)  # set to false for enabling coarse to fine lifting
+        self.g.init_cluster(c2f == -1)  # set to false for enabling coarse to fine lifting
         self.g.split_evidence(2, 50)
-        self.g.split_factors()
-        self.g.split_rvs()
+        if c2f == -1:
+            prev_rvs_num = -1
+            while len(self.g.rvs) != prev_rvs_num:
+                prev_rvs_num = len(self.g.rvs)
+                self.g.split_factors()
+                self.g.split_rvs()
+        else:
+            self.g.split_factors()
+            self.g.split_rvs()
 
         # initialize proposal
         self.initial_proposal()
@@ -464,7 +471,7 @@ class HybridLBP:
 
             if i > 0:
                 self.split_evidence(self.k_mean_k, self.k_mean_iteration, epsilon=epsilon)
-                epsilon -= d
+                epsilon = max(epsilon - c2f, 2)
                 if log_enable:
                     print(f'\tevidence {time.clock() - time_start}')
                     time_start = time.clock()

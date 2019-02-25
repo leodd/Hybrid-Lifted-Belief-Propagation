@@ -108,7 +108,7 @@ res = np.zeros((len(key_list), num_test))
 for j in range(num_test):
     bp = HybridLBP(g, n=10, proposal_approximation='simple')
     start_time = time.process_time()
-    bp.run(10, c2f=True, log_enable=False)
+    bp.run(10, c2f=0, log_enable=False)
     time_cost[name] = (time.process_time() - start_time) / num_test + time_cost.get(name, 0)
     print(name, f'time {time.process_time() - start_time}')
     for i, key in enumerate(key_list):

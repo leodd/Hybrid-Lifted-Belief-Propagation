@@ -113,7 +113,7 @@ for _ in range(num_test):
     name = 'c2fLEPBP'
     bp = HybridLBP(g, n=20)
     start_time = time.process_time()
-    bp.run(15, c2f=True, log_enable=False)
+    bp.run(15, c2f=0, log_enable=False)
     time_cost[name] = (time.process_time() - start_time) / num_test + time_cost.get(name, 0)
     print(name, f'time {time.process_time() - start_time}')
     err = []
