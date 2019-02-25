@@ -23,6 +23,10 @@ def bic_op(x, y):
     return imp_op(x, y) * imp_op(y, x)
 
 
+def eq_op(x, y):
+    return -(x - y) ** 2
+
+
 class MLNPotential(Potential):
     def __init__(self, formula, w=1):
         Potential.__init__(self, symmetric=False)
@@ -30,7 +34,7 @@ class MLNPotential(Potential):
         self.w = w
 
     def get(self, parameters):
-        return e ** (np.clip(self.formula(parameters), 0, 1) * self.w)
+        return e ** (self.formula(parameters) * self.w)
 
 
 class MLNNodePotential(Potential):

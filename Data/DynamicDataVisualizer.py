@@ -4,25 +4,35 @@ from matplotlib.lines import Line2D
 import scipy.io
 
 
-data = np.load('Data/well_t_prediction_2.npy')
+data = np.load('Data/well_t_prediction.npy')
+ans = scipy.io.loadmat('Data/LRKF_well_t_prediction.mat')['x']
 t = data.shape[0]
-for idx in range(data.shape[1]):
+# for idx in range(ans.shape[1]):
+#     y = []
+#     for i in range(t):
+#         y.append(data[i, idx, 1])
+#
+#     plt.plot(list(range(t)), y)
+
+# for idx in range(ans.shape[0]):
+#     y = []
+#     for i in range(t):
+#         y.append(ans[idx, i])
+#
+#     plt.plot(list(range(t)), y, linestyle='None', marker='+')
+
+for idx, color in zip([0, 2, 38], ['r', 'g', 'b']):
     y = []
     for i in range(t):
         y.append(data[i, idx, 1])
-
-    plt.plot(list(range(t)), y)
-
-data = scipy.io.loadmat('Data/LRKF_well_t_prediction_2.mat')['x']
-for idx in range(data.shape[0]):
+    plt.plot(list(range(t)), y, color=color)
     y = []
     for i in range(t):
-        y.append(data[idx, i])
-
-    plt.plot(list(range(t)), y, color='black', linestyle='--', dashes=(2, 5))
+        y.append(ans[idx, i])
+    plt.plot(list(range(t)), y, color=color, linestyle='None', marker='+')
 
 custom_lines = [Line2D([0], [0], color='black', lw=2),
-                Line2D([0], [0], color='black', lw=2, linestyle='--', dashes=(2, 2))]
+                Line2D([0], [0], color='black', lw=2, linestyle='None', marker='+')]
 plt.legend(custom_lines, ('LHBP', 'LRKF (exact)'), loc='lower left')
 
 plt.xlabel('time step')
