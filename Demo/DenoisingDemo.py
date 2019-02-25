@@ -76,7 +76,7 @@ bp = HybridLBP(g, n=10, proposal_approximation='simple')
 # bp.custom_initial_proposal = initial_proposal
 
 start_time = time.process_time()
-bp.run(10, c2f=5, log_enable=False)
+bp.run(10, c2f=0, log_enable=False)
 print('time', time.process_time() - start_time)
 
 print(len(bp.g.rvs))

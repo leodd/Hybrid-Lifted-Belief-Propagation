@@ -436,7 +436,6 @@ class HybridLBP:
     def run(self, iteration=10, log_enable=False, c2f=-1):
         # initialize cluster
         self.g.init_cluster(c2f == -1)  # set to false for enabling coarse to fine lifting
-        self.g.split_evidence(2, 50)
         if c2f == -1:
             prev_rvs_num = -1
             while len(self.g.rvs) != prev_rvs_num:
@@ -444,6 +443,7 @@ class HybridLBP:
                 self.g.split_factors()
                 self.g.split_rvs()
         else:
+            self.g.split_evidence(2, 50)
             self.g.split_factors()
             self.g.split_rvs()
 
@@ -469,7 +469,7 @@ class HybridLBP:
         for rv in self.g.rvs:
             if rv.value is not None:
                 epsilon = max(rv.get_variance(), epsilon)
-        d = epsilon / iteration
+        d = (epsilon - c2f) / iteration
         epsilon -= d
 
         # LBP iteration
@@ -478,9 +478,9 @@ class HybridLBP:
             if log_enable:
                 time_start = time.clock()
 
-            if i > 0:
+            if i > 0 and c2f != -1:
                 self.split_evidence(self.k_mean_k, self.k_mean_iteration, epsilon=epsilon)
-                epsilon = max(epsilon - c2f, 2)
+                epsilon = max(epsilon - d, c2f)
                 if log_enable:
                     print(f'\tevidence {time.clock() - time_start}')
                     time_start = time.clock()
@@ -512,10 +512,11 @@ class HybridLBP:
                 if log_enable:
                     print(f'\tproposal {time.clock() - time_start}')
 
-                self.split_factors()
-                if log_enable:
-                    print(f'\tsplit factor {time.clock() - time_start}')
-                    time_start = time.clock()
+                if c2f != -1:
+                    self.split_factors()
+                    if log_enable:
+                        print(f'\tsplit factor {time.clock() - time_start}')
+                        time_start = time.clock()
 
                 # poll new sample
                 self.old_sample = self.sample
