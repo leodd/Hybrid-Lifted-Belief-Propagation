@@ -34,32 +34,32 @@ for i in cluster_id:
 rvs_id = np.concatenate(rvs_id, axis=None)
 data = well_t[rvs_id, :t]
 
-domain = Domain((-10, 10), continuous=True, integral_points=linspace(-10, 10, 30))
+domain = Domain((-4, 4), continuous=True, integral_points=linspace(-4, 4, 30))
 
 kmf = KalmanFilter(domain,
                    np.eye(len(rvs_id)),
-                   1,
+                   10,
                    np.eye(len(rvs_id)),
                    5)
 
 result = []
+# for i in range(t):
+i = t - 1
+g, rvs_table = kmf.grounded_graph(i + 1, data)
+bp = HybridLBP(g, n=50, proposal_approximation='simple')
+# bp = GaLBP(g)
+print('number of vr', len(g.rvs))
+num_evidence = 0
+for rv in g.rvs:
+    if rv.value is not None:
+        num_evidence += 1
+print('number of evidence', num_evidence)
+
+start_time = time.time()
+bp.run(20, log_enable=False)
+print('time lapse', time.time() - start_time)
+
 for i in range(t):
-    # i = t - 1
-    g, rvs_table = kmf.grounded_graph(i + 1, data)
-    bp = HybridLBP(g, n=20, proposal_approximation='simple')
-    # bp = GaLBP(g)
-    print('number of vr', len(g.rvs))
-    num_evidence = 0
-    for rv in g.rvs:
-        if rv.value is not None:
-            num_evidence += 1
-    print('number of evidence', num_evidence)
-
-    start_time = time.time()
-    bp.run(20, log_enable=False)
-    print('time lapse', time.time() - start_time)
-
-    # for i in range(t):
     temp = []
     for idx, rv in enumerate(rvs_table[i]):
         temp.append([idx, bp.map(rv)])

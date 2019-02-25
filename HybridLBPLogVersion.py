@@ -4,7 +4,7 @@ from scipy.integrate import quad
 from scipy.stats import norm
 from scipy.optimize import fminbound
 from statistics import mean
-from math import sqrt, log, e
+from math import sqrt, log, e, erf
 from collections import Counter
 from itertools import product
 import random
@@ -63,6 +63,12 @@ class HybridLBP:
     def norm_pdf(x, mu, sig):
         u = (x - mu) / sig
         y = exp(-u * u * 0.5) / (2.506628274631 * sig)
+        return y
+
+    @staticmethod
+    def norm_cdf(x, mu, sig):
+        u = (x - mu) / sqrt(sig * 2)
+        y = (1 + erf(u)) * 0.5
         return y
 
     ###########################
@@ -166,7 +172,10 @@ class HybridLBP:
 
     def important_weight(self, x, rv):
         if rv.value is None and rv.domain.continuous:
-            return 1 / max(self.norm_pdf(x, self.q[rv][0], sqrt(self.q[rv][1])), 1e-200)
+            if x == rv.domain.values[0] or x == rv.domain.values[1]:
+                return 1e-200
+            else:
+                return 1 / max(self.norm_pdf(x, self.q[rv][0], sqrt(self.q[rv][1])), 1e-200)
         else:
             return 1
 
