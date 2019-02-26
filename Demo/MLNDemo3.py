@@ -6,7 +6,7 @@ import numpy as np
 import time
 
 
-num_x = 1000
+num_x = 100
 num_y = 2
 num_s = 5
 
@@ -21,7 +21,7 @@ for s in range(num_s):
     S.append(f's{s}')
 
 domain_bool = Domain((0, 1))
-domain_real = Domain((-15, 15), continuous=True, integral_points=linspace(-15, 15, 10))
+domain_real = Domain((-15, 15), continuous=True, integral_points=linspace(-15, 15, 20))
 
 lv_x = LV(X)
 lv_y = LV(Y)
@@ -37,7 +37,7 @@ f1 = ParamF(
     MLNPotential(lambda x: imp_op(x[0] * x[1], x[2]), w=1), nb=(atom_D, atom_E, atom_C)
 )
 f2 = ParamF(
-    MLNPotential(lambda x: x[0] * eq_op(x[1], x[2]), w=0.1), nb=(atom_C, atom_A, atom_B)
+    MLNPotential(lambda x: x[0] * eq_op(x[1], x[2]), w=0.01), nb=(atom_C, atom_A, atom_B)
 )
 
 rel_g = RelationalGraph()
